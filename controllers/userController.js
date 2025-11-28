@@ -75,6 +75,7 @@ export const registerUser = async (req, res) => {
       adharCard,
       serviceCharge,
       perHourCharge,
+      // tatkalEnabled default false hi rahega
     });
 
     const token = signUserJwt(user);
@@ -97,6 +98,7 @@ export const registerUser = async (req, res) => {
         serviceCharge: user.serviceCharge,
         perHourCharge: user.perHourCharge,
         profileImage: user.profileImage,
+        tatkalEnabled: user.tatkalEnabled,
         createdAt: user.createdAt,
       },
       token,
@@ -152,6 +154,7 @@ export const loginUser = async (req, res) => {
         serviceCharge: user.serviceCharge,
         perHourCharge: user.perHourCharge,
         profileImage: user.profileImage,
+        tatkalEnabled: user.tatkalEnabled,
       },
       token,
     });
@@ -182,7 +185,6 @@ export const getMyProfile = async (req, res) => {
 };
 
 // ✅ User: update own profile (edit)
-// PUT /api/users/me  (body: fields + optional profilePhoto)
 export const updateMyProfile = async (req, res) => {
   try {
     const userId = req.user?.sub;
@@ -252,6 +254,49 @@ export const updateMyProfile = async (req, res) => {
   }
 };
 
+// ✅ NEW: User: toggle tatkal seva on/off
+// PATCH /api/users/me/tatkal  { "tatkalEnabled": true/false }
+export const setMyTatkalStatus = async (req, res) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { tatkalEnabled } = req.body;
+
+    if (typeof tatkalEnabled === "undefined") {
+      return res
+        .status(400)
+        .json({ message: "tatkalEnabled is required (true/false)" });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Optionally only allow if role is "society service"
+    if (user.role !== "society service") {
+      return res.status(400).json({
+        message: "Tatkal seva toggle only allowed for society service users",
+      });
+    }
+
+    user.tatkalEnabled = !!tatkalEnabled;
+    await user.save();
+
+    return res.json({
+      message: `Tatkal seva ${user.tatkalEnabled ? "enabled" : "disabled"} successfully`,
+      tatkalEnabled: user.tatkalEnabled,
+    });
+  } catch (err) {
+    console.error("setMyTatkalStatus error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ✅ Admin: list all users
 export const listUsers = async (req, res) => {
   try {
@@ -298,7 +343,6 @@ export const setUserBlockStatus = async (req, res) => {
 };
 
 // ✅ Admin: update any user (edit)
-// PUT /api/users/:id
 export const adminUpdateUser = async (req, res) => {
   try {
     if (!req.user || !req.user.adminId) {
@@ -321,6 +365,7 @@ export const adminUpdateUser = async (req, res) => {
       serviceCharge,
       perHourCharge,
       isBlocked,
+      tatkalEnabled,
     } = req.body;
 
     const updates = {};
@@ -338,6 +383,7 @@ export const adminUpdateUser = async (req, res) => {
     if (serviceCharge !== undefined) updates.serviceCharge = serviceCharge;
     if (perHourCharge !== undefined) updates.perHourCharge = perHourCharge;
     if (isBlocked !== undefined) updates.isBlocked = !!isBlocked;
+    if (tatkalEnabled !== undefined) updates.tatkalEnabled = !!tatkalEnabled;
 
     if (password) {
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
@@ -364,7 +410,6 @@ export const adminUpdateUser = async (req, res) => {
 };
 
 // ✅ Admin: delete user (hard delete)
-// DELETE /api/users/:id
 export const deleteUser = async (req, res) => {
   try {
     if (!req.user || !req.user.adminId) {

@@ -28,7 +28,7 @@ cloudinary.config({
 const userStorage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: "society_users", // folder name tum apni marzi se rakh sakte ho
+    folder: "society_users",
     allowed_formats: ["jpg", "jpeg", "png", "webp"],
     resource_type: "image",
   },
@@ -79,6 +79,34 @@ const sliderMulter = multer({
 const uploadSliderImage = sliderMulter.single("sliderImage");
 
 // --------------------------------------------
+// ✅ SERVICE TEMPLATE IMAGE UPLOAD
+// --------------------------------------------
+const templateStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "society_service_templates",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+    resource_type: "image",
+  },
+});
+
+const templateMulter = multer({
+  storage: templateStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (allowed.includes(file.mimetype)) return cb(null, true);
+    return cb(
+      new Error("Invalid file type. Only JPG, PNG, WEBP allowed for service templates."),
+      false
+    );
+  },
+});
+
+// single: templateImage
+const uploadTemplateImage = templateMulter.single("templateImage");
+
+// --------------------------------------------
 // EXPORTS
 // --------------------------------------------
-export { cloudinary, uploadUserFields, uploadSliderImage };
+export { cloudinary, uploadUserFields, uploadSliderImage, uploadTemplateImage };

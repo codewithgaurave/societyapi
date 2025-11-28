@@ -68,6 +68,12 @@ const userSchema = new mongoose.Schema(
       type: String,
     },
 
+    // 🔹 Tatkal Seva toggle
+    tatkalEnabled: {
+      type: Boolean,
+      default: false,
+    },
+
     // IST timestamps
     createdAtIST: { type: String },
     updatedAtIST: { type: String },

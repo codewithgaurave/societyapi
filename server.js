@@ -11,7 +11,8 @@ import connectDB from "./config/db.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import serviceCategoryRoutes from "./routes/serviceCategoryRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
-import sliderRoutes from "./routes/sliderRoutes.js";  // 👈 NEW
+import sliderRoutes from "./routes/sliderRoutes.js";
+import serviceTemplateRoutes from "./routes/serviceTemplateRoutes.js"; // 👈 NEW
 
 const app = express();
 
@@ -31,11 +32,10 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Rate limit for login endpoints
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,                 // max requests per IP
+  windowMs: 15 * 60 * 1000,
+  max: 100,
 });
 
-// ✅ correct login endpoints for rate limit
 app.use("/api/admin/login", authLimiter);
 app.use("/api/users/login", authLimiter);
 
@@ -46,7 +46,8 @@ await connectDB();
 app.use("/api/admin", adminRoutes);
 app.use("/api/service-category", serviceCategoryRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/sliders", sliderRoutes);   // 👈 NEW: all slider APIs
+app.use("/api/sliders", sliderRoutes);
+app.use("/api/service-templates", serviceTemplateRoutes); // 👈 NEW
 
 // Health / root
 app.get("/", (_req, res) => res.send("✅ API is running..."));

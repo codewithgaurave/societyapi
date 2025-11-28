@@ -9,6 +9,7 @@ import {
   updateMyProfile,
   adminUpdateUser,
   deleteUser,
+  setMyTatkalStatus,   // 👈 NEW
 } from "../controllers/userController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { uploadUserFields } from "../config/cloudinary.js"; // path adjust if needed
@@ -26,6 +27,9 @@ router.get("/me", requireAuth, getMyProfile);
 
 // 🔹 User: update own profile (can also send new profilePhoto)
 router.put("/me", requireAuth, uploadUserFields, updateMyProfile);
+
+// 🔹 User: toggle tatkal seva on/off
+router.patch("/me/tatkal", requireAuth, setMyTatkalStatus);
 
 // 🔹 Admin: list all users
 router.get("/", requireAuth, listUsers);
