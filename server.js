@@ -12,7 +12,9 @@ import adminRoutes from "./routes/adminRoutes.js";
 import serviceCategoryRoutes from "./routes/serviceCategoryRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import sliderRoutes from "./routes/sliderRoutes.js";
-import serviceTemplateRoutes from "./routes/serviceTemplateRoutes.js"; // 👈 NEW
+import serviceTemplateRoutes from "./routes/serviceTemplateRoutes.js";
+import holidayRoutes from "./routes/holidayRoutes.js";
+import colonyRoutes from "./routes/colonyRoutes.js";
 
 const app = express();
 
@@ -47,7 +49,9 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/service-category", serviceCategoryRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/sliders", sliderRoutes);
-app.use("/api/service-templates", serviceTemplateRoutes); // 👈 NEW
+app.use("/api/service-templates", serviceTemplateRoutes);
+app.use("/api/holidays", holidayRoutes);
+app.use("/api/colonies", colonyRoutes);
 
 // Health / root
 app.get("/", (_req, res) => res.send("✅ API is running..."));
