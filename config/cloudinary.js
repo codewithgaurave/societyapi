@@ -22,9 +22,9 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// --------------------------------------------
-// ✅ USER PROFILE PHOTO
-// --------------------------------------------
+// -----------------------------------------------------
+// ✅ USER PROFILE PHOTO UPLOAD
+// -----------------------------------------------------
 const userStorage = new CloudinaryStorage({
   cloudinary,
   params: {
@@ -50,9 +50,9 @@ const uploadUserFiles = multer({
 // single: profilePhoto
 const uploadUserFields = uploadUserFiles.single("profilePhoto");
 
-// --------------------------------------------
+// -----------------------------------------------------
 // ✅ SLIDER IMAGE UPLOAD
-// --------------------------------------------
+// -----------------------------------------------------
 const sliderStorage = new CloudinaryStorage({
   cloudinary,
   params: {
@@ -78,35 +78,35 @@ const sliderMulter = multer({
 // single: sliderImage
 const uploadSliderImage = sliderMulter.single("sliderImage");
 
-// --------------------------------------------
-// ✅ SERVICE TEMPLATE IMAGE UPLOAD
-// --------------------------------------------
+// -----------------------------------------------------
+// ✅ SERVICE TEMPLATE UPLOAD (ALLOW ALL FILE TYPES)
+// -----------------------------------------------------
 const templateStorage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: "society_service_templates",
-    allowed_formats: ["jpg", "jpeg", "png", "webp"],
-    resource_type: "image",
+    resource_type: "auto", // allows ALL file types
   },
 });
 
 const templateMulter = multer({
   storage: templateStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB allowed
   fileFilter: (req, file, cb) => {
-    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-    if (allowed.includes(file.mimetype)) return cb(null, true);
-    return cb(
-      new Error("Invalid file type. Only JPG, PNG, WEBP allowed for service templates."),
-      false
-    );
+    // Allow ANY file type
+    cb(null, true);
   },
 });
 
 // single: templateImage
 const uploadTemplateImage = templateMulter.single("templateImage");
 
-// --------------------------------------------
+// -----------------------------------------------------
 // EXPORTS
-// --------------------------------------------
-export { cloudinary, uploadUserFields, uploadSliderImage, uploadTemplateImage };
+// -----------------------------------------------------
+export {
+  cloudinary,
+  uploadUserFields,
+  uploadSliderImage,
+  uploadTemplateImage,
+};
