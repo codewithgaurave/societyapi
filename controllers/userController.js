@@ -3,6 +3,11 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
+// ✅ NEW imports for combined details
+import Availability from "../models/Availability.js";
+import Holiday from "../models/Holiday.js";
+import ServiceTemplate from "../models/ServiceTemplate.js";
+
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.USER_JWT_EXPIRES_IN || "7d";
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || "12", 10);
@@ -254,8 +259,7 @@ export const updateMyProfile = async (req, res) => {
   }
 };
 
-// ✅ NEW: User: toggle tatkal seva on/off
-// PATCH /api/users/me/tatkal  { "tatkalEnabled": true/false }
+// ✅ User: toggle tatkal seva on/off
 export const setMyTatkalStatus = async (req, res) => {
   try {
     const userId = req.user?.sub;
@@ -277,7 +281,6 @@ export const setMyTatkalStatus = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Optionally only allow if role is "society service"
     if (user.role !== "society service") {
       return res.status(400).json({
         message: "Tatkal seva toggle only allowed for society service users",
@@ -293,6 +296,29 @@ export const setMyTatkalStatus = async (req, res) => {
     });
   } catch (err) {
     console.error("setMyTatkalStatus error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ PUBLIC: list all tatkal-enabled society service users
+export const listTatkalUsers = async (req, res) => {
+  try {
+    const { serviceCategory, pincode } = req.query;
+
+    const filter = {
+      tatkalEnabled: true,
+      isBlocked: false,
+      role: "society service",
+    };
+
+    if (serviceCategory) filter.serviceCategory = serviceCategory;
+    if (pincode) filter.pincode = Number(pincode);
+
+    const users = await User.find(filter, "-password").lean();
+
+    return res.json({ users });
+  } catch (err) {
+    console.error("listTatkalUsers error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -430,6 +456,84 @@ export const deleteUser = async (req, res) => {
     });
   } catch (err) {
     console.error("deleteUser error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+/* ------------------------------------------------------------------ */
+/* ✅ NEW: Get full user details by userId (public)
+   - basic user detail
+   - availability[]
+   - holidays[]
+   - templates[]
+   - hasActiveHoliday (aaj chhutti pe hai ya nahi)
+   - hasTemplates
+   URL: GET /api/users/:id/details
+/* ------------------------------------------------------------------ */
+
+export const getUserDetailsById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findById(id).lean();
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const [availability, holidays, templates] = await Promise.all([
+      Availability.find({ user: id })
+        .populate("colonies", "name address city pincode")
+        .sort({ date: 1, startTime: 1 })
+        .lean(),
+      Holiday.find({ user: id })
+        .sort({ startDate: -1 })
+        .lean(),
+      ServiceTemplate.find({ user: id, isActive: true })
+        .sort({ createdAt: -1 })
+        .lean(),
+    ]);
+
+    const now = new Date();
+
+    const hasActiveHoliday = holidays.some((h) => {
+      if (!h.startDate || !h.endDate) return false;
+      const start = new Date(h.startDate);
+      const end = new Date(h.endDate);
+      return start <= now && end >= now && h.status !== "rejected";
+    });
+
+    const hasTemplates = templates.length > 0;
+
+    return res.json({
+      user,
+      availability,
+      holidays,
+      templates,
+      hasActiveHoliday,
+      hasTemplates,
+    });
+  } catch (err) {
+    console.error("getUserDetailsById error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+// ✅ PUBLIC: get all users (safe public data only)
+export const getAllUsersPublic = async (req, res) => {
+  try {
+    const users = await User.find(
+      { isBlocked: false }, // sirf non-blocked users
+      `fullName mobileNumber whatsappNumber email registrationID 
+       profileImage role serviceCategory experience tatkalEnabled 
+       pincode address`
+    )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.json({ users });
+  } catch (err) {
+    console.error("getAllUsersPublic error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
