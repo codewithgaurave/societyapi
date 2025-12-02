@@ -3,6 +3,10 @@ import Need from "../models/Need.js";
 import User from "../models/User.js";
 import Colony from "../models/Colony.js";
 import ServiceCategory from "../models/ServiceCategory.js";
+import Availability from "../models/Availability.js";
+import Holiday from "../models/Holiday.js";
+import ServiceTemplate from "../models/ServiceTemplate.js";
+
 
 // ✅ Create need (society member need post karega)
 // Body: { userId, serviceCategoryId, colonyId, description }
@@ -132,6 +136,71 @@ export const deleteNeed = async (req, res) => {
     });
   } catch (err) {
     console.error("deleteNeed error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ Get need + full user details by needId
+// GET /api/needs/:id/details
+export const getNeedWithUserDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1️⃣ Need dhoondo
+    const need = await Need.findById(id)
+      .populate("user", "fullName mobileNumber whatsappNumber email registrationID role profileImage address pincode serviceCategory experience tatkalEnabled")
+      .populate("serviceCategory", "name")
+      .populate("colony", "name address city pincode")
+      .lean();
+
+    if (!need) {
+      return res.status(404).json({ message: "Need not found" });
+    }
+
+    const userId = need.user?._id || need.user;
+
+    // 2️⃣ User ka full detail (jaise tumne getUserDetailsById me kiya tha)
+    const user = await User.findById(userId).lean();
+    if (!user) {
+      return res.status(404).json({ message: "User not found for this need" });
+    }
+
+    const [availability, holidays, templates] = await Promise.all([
+      Availability.find({ user: userId })
+        .populate("colonies", "name address city pincode")
+        .sort({ date: 1, startTime: 1 })
+        .lean(),
+      Holiday.find({ user: userId })
+        .sort({ startDate: -1 })
+        .lean(),
+      ServiceTemplate.find({ user: userId, isActive: true })
+        .sort({ createdAt: -1 })
+        .lean(),
+    ]);
+
+    const now = new Date();
+
+    const hasActiveHoliday = holidays.some((h) => {
+      if (!h.startDate || !h.endDate) return false;
+      const start = new Date(h.startDate);
+      const end = new Date(h.endDate);
+      return start <= now && end >= now && h.status !== "rejected";
+    });
+
+    const hasTemplates = templates.length > 0;
+
+    // 3️⃣ Final response
+    return res.json({
+      need,           // jis need ki id bheji thi uska full detail
+      user,           // user ka basic detail
+      availability,   // user ka availability
+      holidays,       // user ki holidays
+      templates,      // user ke active service templates
+      hasActiveHoliday,
+      hasTemplates,
+    });
+  } catch (err) {
+    console.error("getNeedWithUserDetails error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };

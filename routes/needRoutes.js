@@ -5,6 +5,7 @@ import {
   getAllNeeds,
   getNeedsByUser,
   deleteNeed,
+  getNeedWithUserDetails,
 } from "../controllers/needController.js";
 // import { requireAuth } from "../middleware/auth.js"; // agar auth se karna ho
 
@@ -19,6 +20,9 @@ router.get("/", getAllNeeds);
 
 // 🔹 Get needs of a specific user
 router.get("/user/:userId", getNeedsByUser);
+
+router.get("/:id/details", getNeedWithUserDetails);
+
 
 // 🔹 Delete need by id (abhi public, chahe to auth laga sakte ho)
 router.delete("/:id", deleteNeed);
