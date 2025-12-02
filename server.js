@@ -17,6 +17,8 @@ import holidayRoutes from "./routes/holidayRoutes.js";
 import colonyRoutes from "./routes/colonyRoutes.js";
 import availabilityRoutes from "./routes/availabilityRoutes.js";
 import needRoutes from "./routes/needRoutes.js";
+import basicUserRoutes from "./routes/basicUserRoutes.js";
+
 
 const app = express();
 
@@ -56,6 +58,7 @@ app.use("/api/holidays", holidayRoutes);
 app.use("/api/colonies", colonyRoutes);
 app.use("/api/availability", availabilityRoutes);
 app.use("/api/needs", needRoutes);
+app.use("/api/basic-users", basicUserRoutes);
 
 // Health / root
 app.get("/", (_req, res) => res.send("✅ API is running..."));
