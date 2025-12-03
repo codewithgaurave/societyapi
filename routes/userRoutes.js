@@ -11,7 +11,7 @@ import {
   setMyTatkalStatus,
   listTatkalUsers,
   getUserDetailsById,
-  getAllUsersPublic,      // 👈 NEW
+  getAllUsersPublic,     
 } from "../controllers/userController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { uploadUserFields } from "../config/cloudinary.js";
