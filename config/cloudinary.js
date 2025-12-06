@@ -23,27 +23,22 @@ cloudinary.config({
 });
 
 // -----------------------------------------------------
-// ✅ USER PROFILE PHOTO UPLOAD
+// ✅ USER PROFILE PHOTO UPLOAD - ALL FILE TYPES ALLOWED
 // -----------------------------------------------------
 const userStorage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: "society_users",
-    allowed_formats: ["jpg", "jpeg", "png", "webp"],
-    resource_type: "image",
+    resource_type: "auto", // ✅ Allows ALL file types
   },
 });
 
 const uploadUserFiles = multer({
   storage: userStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
   fileFilter: (req, file, cb) => {
-    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-    if (allowed.includes(file.mimetype)) return cb(null, true);
-    return cb(
-      new Error("Invalid file type. Only image files are allowed for profile photo."),
-      false
-    );
+    // ✅ Allow ANY file type
+    cb(null, true);
   },
 });
 
@@ -51,27 +46,22 @@ const uploadUserFiles = multer({
 const uploadUserFields = uploadUserFiles.single("profilePhoto");
 
 // -----------------------------------------------------
-// ✅ SLIDER IMAGE UPLOAD
+// ✅ SLIDER IMAGE UPLOAD - ALL FILE TYPES ALLOWED
 // -----------------------------------------------------
 const sliderStorage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: "society_sliders",
-    allowed_formats: ["jpg", "jpeg", "png", "webp"],
-    resource_type: "image",
+    resource_type: "auto", // ✅ Allows ALL file types
   },
 });
 
 const sliderMulter = multer({
   storage: sliderStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
   fileFilter: (req, file, cb) => {
-    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-    if (allowed.includes(file.mimetype)) return cb(null, true);
-    return cb(
-      new Error("Invalid file type. Only JPG, PNG, WEBP allowed for slider images."),
-      false
-    );
+    // ✅ Allow ANY file type
+    cb(null, true);
   },
 });
 

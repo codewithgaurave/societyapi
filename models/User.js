@@ -64,7 +64,7 @@ const userSchema = new mongoose.Schema(
     serviceCharge: {
       type: String,
     },
-    perHourCharge: {
+    otherCharges: { // ✅ Changed from perHourCharge to otherCharges
       type: String,
     },
 

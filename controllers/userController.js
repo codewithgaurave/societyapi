@@ -40,7 +40,7 @@ export const registerUser = async (req, res) => {
       experience,
       adharCard,
       serviceCharge,
-      perHourCharge,
+      otherCharges, // ✅ Changed from perHourCharge to otherCharges
     } = req.body;
 
     if (!fullName || !mobileNumber || !password || !address || !pincode || !role) {
@@ -79,7 +79,7 @@ export const registerUser = async (req, res) => {
       experience,
       adharCard,
       serviceCharge,
-      perHourCharge,
+      otherCharges, // ✅ Changed from perHourCharge to otherCharges
       // tatkalEnabled default false hi rahega
     });
 
@@ -101,7 +101,7 @@ export const registerUser = async (req, res) => {
         experience: user.experience,
         adharCard: user.adharCard,
         serviceCharge: user.serviceCharge,
-        perHourCharge: user.perHourCharge,
+        otherCharges: user.otherCharges, // ✅ Changed from perHourCharge to otherCharges
         profileImage: user.profileImage,
         tatkalEnabled: user.tatkalEnabled,
         createdAt: user.createdAt,
@@ -157,7 +157,7 @@ export const loginUser = async (req, res) => {
         experience: user.experience,
         adharCard: user.adharCard,
         serviceCharge: user.serviceCharge,
-        perHourCharge: user.perHourCharge,
+        otherCharges: user.otherCharges, // ✅ Changed from perHourCharge to otherCharges
         profileImage: user.profileImage,
         tatkalEnabled: user.tatkalEnabled,
       },
@@ -210,7 +210,7 @@ export const updateMyProfile = async (req, res) => {
       experience,
       adharCard,
       serviceCharge,
-      perHourCharge,
+      otherCharges, // ✅ Changed from perHourCharge to otherCharges
     } = req.body;
 
     const updates = {};
@@ -226,7 +226,7 @@ export const updateMyProfile = async (req, res) => {
     if (experience !== undefined) updates.experience = experience;
     if (adharCard !== undefined) updates.adharCard = adharCard;
     if (serviceCharge !== undefined) updates.serviceCharge = serviceCharge;
-    if (perHourCharge !== undefined) updates.perHourCharge = perHourCharge;
+    if (otherCharges !== undefined) updates.otherCharges = otherCharges; // ✅ Changed
 
     // password change (optional)
     if (password) {
@@ -389,7 +389,7 @@ export const adminUpdateUser = async (req, res) => {
       experience,
       adharCard,
       serviceCharge,
-      perHourCharge,
+      otherCharges, // ✅ Changed from perHourCharge to otherCharges
       isBlocked,
       tatkalEnabled,
     } = req.body;
@@ -407,7 +407,7 @@ export const adminUpdateUser = async (req, res) => {
     if (experience !== undefined) updates.experience = experience;
     if (adharCard !== undefined) updates.adharCard = adharCard;
     if (serviceCharge !== undefined) updates.serviceCharge = serviceCharge;
-    if (perHourCharge !== undefined) updates.perHourCharge = perHourCharge;
+    if (otherCharges !== undefined) updates.otherCharges = otherCharges; // ✅ Changed
     if (isBlocked !== undefined) updates.isBlocked = !!isBlocked;
     if (tatkalEnabled !== undefined) updates.tatkalEnabled = !!tatkalEnabled;
 
@@ -518,7 +518,6 @@ export const getUserDetailsById = async (req, res) => {
   }
 };
 
-
 // ✅ PUBLIC: get all users (safe public data only)
 export const getAllUsersPublic = async (req, res) => {
   try {
@@ -526,7 +525,7 @@ export const getAllUsersPublic = async (req, res) => {
       { isBlocked: false }, // sirf non-blocked users
       `fullName mobileNumber whatsappNumber email registrationID 
        profileImage role serviceCategory experience tatkalEnabled 
-       pincode address`
+       pincode address otherCharges serviceCharge` // ✅ Added otherCharges here
     )
       .sort({ createdAt: -1 })
       .lean();
