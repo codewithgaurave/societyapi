@@ -204,3 +204,139 @@ export const getNeedWithUserDetails = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+
+// ✅ Get needs for a service provider based on THEIR availability colonies
+// Aur sirf uske service category ke needs
+export const getColonySpecificNeeds = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { serviceCategory } = req.query;
+
+    if (!serviceCategory) {
+      return res.status(400).json({ 
+        message: "serviceCategory query parameter required" 
+      });
+    }
+
+    // 1️⃣ Check user exists and is service provider
+    const user = await User.findById(userId).lean();
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.role !== "society service") {
+      return res.status(400).json({ 
+        message: "Only service providers can access this" 
+      });
+    }
+
+    // 2️⃣ Verify service category matches
+    if (user.serviceCategory !== serviceCategory) {
+      return res.status(400).json({ 
+        message: `Service category mismatch. You provide ${user.serviceCategory}, but requested ${serviceCategory}` 
+      });
+    }
+
+    // 3️⃣ Get ALL colonies where this provider has availability (present/future)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const availabilityRecords = await Availability.find({
+      user: userId,
+      date: { $gte: today }, // aaj aur aage ki dates
+      isAvailable: true
+    })
+    .select("colonies date startTime endTime")
+    .populate("colonies", "name address city pincode")
+    .lean();
+
+    // 4️⃣ Extract unique colony IDs
+    const colonyIds = [];
+    const colonyDetailsMap = new Map();
+    
+    availabilityRecords.forEach(record => {
+      if (record.colonies && Array.isArray(record.colonies)) {
+        record.colonies.forEach(colony => {
+          if (colony && !colonyIds.includes(colony._id.toString())) {
+            colonyIds.push(colony._id.toString());
+            colonyDetailsMap.set(colony._id.toString(), {
+              id: colony._id,
+              name: colony.name,
+              address: colony.address,
+              city: colony.city,
+              pincode: colony.pincode
+            });
+          }
+        });
+      }
+    });
+
+    // 5️⃣ Agar koi availability nahi hai, to empty array return karo
+    if (colonyIds.length === 0) {
+      return res.json({
+        message: "No availability set in any colony. Set availability first.",
+        needs: [],
+        availableColonies: [],
+        user: {
+          id: user._id,
+          name: user.fullName,
+          serviceCategory: user.serviceCategory
+        }
+      });
+    }
+
+    // 6️⃣ Find service category ID
+    const serviceCat = await ServiceCategory.findOne({ 
+      name: serviceCategory,
+      isActive: true 
+    }).lean();
+
+    if (!serviceCat) {
+      return res.status(404).json({ 
+        message: "Service category not found or inactive" 
+      });
+    }
+
+    // 7️⃣ Now fetch needs that match:
+    //    - Service Category se match
+    //    - Colony me match (jo user ki availability colonies me hai)
+    //    - Status open ho
+    const needs = await Need.find({
+      serviceCategory: serviceCat._id,
+      colony: { $in: colonyIds },
+      status: "open" // sirf open needs
+    })
+    .populate("user", "fullName mobileNumber registrationID role address pincode")
+    .populate("serviceCategory", "name")
+    .populate("colony", "name address city pincode")
+    .sort({ createdAt: -1 })
+    .lean();
+
+    // 8️⃣ Get colony details for response
+    const availableColonies = Array.from(colonyDetailsMap.values());
+
+    return res.json({
+      message: `Found ${needs.length} needs in your available colonies`,
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        mobileNumber: user.mobileNumber,
+        serviceCategory: user.serviceCategory,
+        experience: user.experience,
+        tatkalEnabled: user.tatkalEnabled
+      },
+      availableColonies: availableColonies,
+      needs: needs,
+      stats: {
+        totalNeeds: needs.length,
+        availableColoniesCount: availableColonies.length,
+        availabilityRecordsCount: availabilityRecords.length
+      }
+    });
+
+  } catch (err) {
+    console.error("getColonySpecificNeeds error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
