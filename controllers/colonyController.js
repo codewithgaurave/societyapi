@@ -388,3 +388,42 @@ export const bulkDeleteColonies = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+// Export colonies to Excel
+export const exportColonies = async (req, res) => {
+  try {
+    const colonies = await Colony.find({}).sort({ name: 1 }).lean();
+
+    const data = colonies.map(colony => ({
+      "Name": colony.name || "",
+      "Pincode": colony.pincode || "",
+      "Address": colony.address || "",
+      "City": colony.city || "",
+      "Landmark": colony.landmark || "",
+      "Description": colony.description || "",
+      "Status": colony.isActive ? "Active" : "Inactive",
+      "Created Date": colony.createdAtIST || "",
+      "Updated Date": colony.updatedAtIST || "",
+    }));
+
+    const worksheet = xlsx.utils.json_to_sheet(data);
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, "Colonies");
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="colonies_export_${Date.now()}.xlsx"`
+    );
+
+    const buffer = xlsx.write(workbook, { type: "buffer", bookType: "xlsx" });
+    res.send(buffer);
+
+  } catch (err) {
+    console.error("exportColonies error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};

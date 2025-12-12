@@ -7,7 +7,8 @@ import {
   importFromExcel,
   downloadSampleTemplate,
   uploadExcel,
-  bulkDeleteColonies
+  bulkDeleteColonies,
+  exportColonies
 } from "../controllers/colonyController.js";
 import { requireAuth } from "../middleware/auth.js";
 
@@ -39,5 +40,8 @@ router.post("/import",
 );
 
 router.get("/download-template", requireAuth, downloadSampleTemplate);
+
+// routes/colonyRoutes.js
+router.get("/export", requireAuth, exportColonies);
 
 export default router;
