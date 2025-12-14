@@ -536,3 +536,45 @@ export const getAllUsersPublic = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+
+// ✅ PUBLIC: get society service users by location (safe)
+export const getSocietyServiceUsersByLocation = async (req, res) => {
+  try {
+    const { pincode, serviceCategory } = req.query;
+
+    if (!pincode) {
+      return res.status(400).json({
+        message: "pincode is required",
+      });
+    }
+
+    const filter = {
+      isBlocked: false,
+      role: "society service",
+      pincode: Number(pincode),
+    };
+
+    // optional filter
+    if (serviceCategory) {
+      filter.serviceCategory = serviceCategory;
+    }
+
+    const users = await User.find(
+      filter,
+      `fullName mobileNumber whatsappNumber email registrationID
+       profileImage role serviceCategory experience tatkalEnabled
+       pincode address otherCharges serviceCharge`
+    )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.json({
+      count: users.length,
+      users,
+    });
+  } catch (err) {
+    console.error("getSocietyServiceUsersByLocation error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};

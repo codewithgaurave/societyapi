@@ -12,6 +12,7 @@ import {
   listTatkalUsers,
   getUserDetailsById,
   getAllUsersPublic,     
+  getSocietyServiceUsersByLocation,
 } from "../controllers/userController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { uploadUserFields } from "../config/cloudinary.js";
@@ -53,5 +54,12 @@ router.put("/:id", requireAuth, adminUpdateUser);
 
 // 🔹 Admin: delete user
 router.delete("/:id", requireAuth, deleteUser);
+
+// 🔹 PUBLIC: society service users by location
+router.get(
+  "/public/society-service/by-location",
+  getSocietyServiceUsersByLocation
+);
+
 
 export default router;
