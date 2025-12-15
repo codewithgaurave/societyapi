@@ -323,6 +323,40 @@ export const listTatkalUsers = async (req, res) => {
   }
 };
 
+// ✅ PUBLIC: list tatkal-enabled society service users by pincode
+export const listTatkalUsersByPincode = async (req, res) => {
+  try {
+    const { pincode, serviceCategory } = req.query;
+
+    if (!pincode) {
+      return res.status(400).json({
+        message: "pincode is required",
+      });
+    }
+
+    const filter = {
+      tatkalEnabled: true,
+      isBlocked: false,
+      role: "society service",
+      pincode: Number(pincode),
+    };
+
+    // optional (same behaviour as listTatkalUsers)
+    if (serviceCategory) {
+      filter.serviceCategory = serviceCategory;
+    }
+
+    const users = await User.find(filter, "-password").lean();
+
+    // ✅ SAME RESPONSE FORMAT
+    return res.json({ users });
+  } catch (err) {
+    console.error("listTatkalUsersByPincode error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+
 // ✅ Admin: list all users
 export const listUsers = async (req, res) => {
   try {

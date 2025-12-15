@@ -13,6 +13,7 @@ import {
   getUserDetailsById,
   getAllUsersPublic,     
   getSocietyServiceUsersByLocation,
+  listTatkalUsersByPincode,
 } from "../controllers/userController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { uploadUserFields } from "../config/cloudinary.js";
@@ -24,6 +25,11 @@ router.get("/public/all", getAllUsersPublic);
 
 // 🔹 PUBLIC: get all tatkal-enabled service providers
 router.get("/tatkal", listTatkalUsers);
+
+router.get(
+  "/tatkal/by-pincode",
+  listTatkalUsersByPincode
+);
 
 // 🔹 PUBLIC: get full details of a user by id
 router.get("/:id/details", getUserDetailsById);
