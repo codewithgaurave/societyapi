@@ -575,7 +575,7 @@ export const getAllUsersPublic = async (req, res) => {
 // ✅ PUBLIC: get society service users by location (safe)
 export const getSocietyServiceUsersByLocation = async (req, res) => {
   try {
-    const { pincode, serviceCategory } = req.query;
+    const { pincode, serviceCategory, serviceCategoryId } = req.query;
 
     if (!pincode) {
       return res.status(400).json({
@@ -589,9 +589,28 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
       pincode: Number(pincode),
     };
 
-    // optional filter
+    // Filter by service category name (existing)
     if (serviceCategory) {
       filter.serviceCategory = serviceCategory;
+    }
+
+    // ✅ NEW: Filter by service category ID
+    if (serviceCategoryId) {
+      try {
+        const ServiceCategory = (await import("../models/ServiceCategory.js")).default;
+        const categoryDoc = await ServiceCategory.findById(serviceCategoryId).lean();
+        if (categoryDoc) {
+          filter.serviceCategory = categoryDoc.name;
+        } else {
+          return res.status(404).json({
+            message: "Service category not found",
+          });
+        }
+      } catch (err) {
+        return res.status(400).json({
+          message: "Invalid service category ID format",
+        });
+      }
     }
 
     const users = await User.find(
@@ -606,6 +625,11 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
     return res.json({
       count: users.length,
       users,
+      filters: {
+        pincode: Number(pincode),
+        serviceCategory: filter.serviceCategory,
+        serviceCategoryId
+      }
     });
   } catch (err) {
     console.error("getSocietyServiceUsersByLocation error:", err);
