@@ -303,7 +303,7 @@ export const setMyTatkalStatus = async (req, res) => {
 // ✅ PUBLIC: list all tatkal-enabled society service users
 export const listTatkalUsers = async (req, res) => {
   try {
-    const { serviceCategory, pincode } = req.query;
+    const { serviceCategoryId, pincode } = req.query;
 
     const filter = {
       tatkalEnabled: true,
@@ -311,10 +311,12 @@ export const listTatkalUsers = async (req, res) => {
       role: "society service",
     };
 
-    if (serviceCategory) filter.serviceCategory = serviceCategory;
+    if (serviceCategoryId) filter.serviceCategory = serviceCategoryId;
     if (pincode) filter.pincode = Number(pincode);
 
-    const users = await User.find(filter, "-password").lean();
+    const users = await User.find(filter, "-password")
+      .populate("serviceCategory", "name description")
+      .lean();
 
     return res.json({ users });
   } catch (err) {
@@ -326,7 +328,7 @@ export const listTatkalUsers = async (req, res) => {
 // ✅ PUBLIC: list tatkal-enabled society service users by pincode
 export const listTatkalUsersByPincode = async (req, res) => {
   try {
-    const { pincode, serviceCategory } = req.query;
+    const { pincode, serviceCategoryId } = req.query;
 
     if (!pincode) {
       return res.status(400).json({
@@ -341,12 +343,14 @@ export const listTatkalUsersByPincode = async (req, res) => {
       pincode: Number(pincode),
     };
 
-    // optional (same behaviour as listTatkalUsers)
-    if (serviceCategory) {
-      filter.serviceCategory = serviceCategory;
+    // optional filter by service category ID
+    if (serviceCategoryId) {
+      filter.serviceCategory = serviceCategoryId;
     }
 
-    const users = await User.find(filter, "-password").lean();
+    const users = await User.find(filter, "-password")
+      .populate("serviceCategory", "name description")
+      .lean();
 
     // ✅ SAME RESPONSE FORMAT
     return res.json({ users });
@@ -561,6 +565,7 @@ export const getAllUsersPublic = async (req, res) => {
        profileImage role serviceCategory experience tatkalEnabled 
        pincode address otherCharges serviceCharge` // ✅ Added otherCharges here
     )
+      .populate("serviceCategory", "name description")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -575,7 +580,7 @@ export const getAllUsersPublic = async (req, res) => {
 // ✅ PUBLIC: get society service users by location (safe)
 export const getSocietyServiceUsersByLocation = async (req, res) => {
   try {
-    const { pincode, serviceCategory, serviceCategoryId } = req.query;
+    const { pincode, serviceCategoryId } = req.query;
 
     if (!pincode) {
       return res.status(400).json({
@@ -589,28 +594,9 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
       pincode: Number(pincode),
     };
 
-    // Filter by service category name (existing)
-    if (serviceCategory) {
-      filter.serviceCategory = serviceCategory;
-    }
-
-    // ✅ NEW: Filter by service category ID
+    // Filter by service category ID
     if (serviceCategoryId) {
-      try {
-        const ServiceCategory = (await import("../models/ServiceCategory.js")).default;
-        const categoryDoc = await ServiceCategory.findById(serviceCategoryId).lean();
-        if (categoryDoc) {
-          filter.serviceCategory = categoryDoc.name;
-        } else {
-          return res.status(404).json({
-            message: "Service category not found",
-          });
-        }
-      } catch (err) {
-        return res.status(400).json({
-          message: "Invalid service category ID format",
-        });
-      }
+      filter.serviceCategory = serviceCategoryId;
     }
 
     const users = await User.find(
@@ -619,6 +605,7 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
        profileImage role serviceCategory experience tatkalEnabled
        pincode address otherCharges serviceCharge`
     )
+      .populate("serviceCategory", "name description")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -627,7 +614,6 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
       users,
       filters: {
         pincode: Number(pincode),
-        serviceCategory: filter.serviceCategory,
         serviceCategoryId
       }
     });

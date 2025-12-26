@@ -211,16 +211,18 @@ export const getNeedWithUserDetails = async (req, res) => {
 export const getColonySpecificNeeds = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { serviceCategory } = req.query;
+    const { serviceCategoryId } = req.query;
 
-    if (!serviceCategory) {
+    if (!serviceCategoryId) {
       return res.status(400).json({ 
-        message: "serviceCategory query parameter required" 
+        message: "serviceCategoryId query parameter required" 
       });
     }
 
     // 1️⃣ Check user exists and is service provider
-    const user = await User.findById(userId).lean();
+    const user = await User.findById(userId)
+      .populate("serviceCategory", "name")
+      .lean();
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -232,9 +234,9 @@ export const getColonySpecificNeeds = async (req, res) => {
     }
 
     // 2️⃣ Verify service category matches
-    if (user.serviceCategory !== serviceCategory) {
+    if (user.serviceCategory?._id?.toString() !== serviceCategoryId) {
       return res.status(400).json({ 
-        message: `Service category mismatch. You provide ${user.serviceCategory}, but requested ${serviceCategory}` 
+        message: `Service category mismatch. You provide ${user.serviceCategory?.name}, but requested different category` 
       });
     }
 
@@ -286,24 +288,12 @@ export const getColonySpecificNeeds = async (req, res) => {
       });
     }
 
-    // 6️⃣ Find service category ID
-    const serviceCat = await ServiceCategory.findOne({ 
-      name: serviceCategory,
-      isActive: true 
-    }).lean();
-
-    if (!serviceCat) {
-      return res.status(404).json({ 
-        message: "Service category not found or inactive" 
-      });
-    }
-
-    // 7️⃣ Now fetch needs that match:
+    // 6️⃣ Now fetch needs that match:
     //    - Service Category se match
     //    - Colony me match (jo user ki availability colonies me hai)
     //    - Status open ho
     const needs = await Need.find({
-      serviceCategory: serviceCat._id,
+      serviceCategory: serviceCategoryId,
       colony: { $in: colonyIds },
       status: "open" // sirf open needs
     })
@@ -313,7 +303,7 @@ export const getColonySpecificNeeds = async (req, res) => {
     .sort({ createdAt: -1 })
     .lean();
 
-    // 8️⃣ Get colony details for response
+    // 7️⃣ Get colony details for response
     const availableColonies = Array.from(colonyDetailsMap.values());
 
     return res.json({

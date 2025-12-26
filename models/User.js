@@ -53,7 +53,8 @@ const userSchema = new mongoose.Schema(
       enum: ["society member", "society service"],
     },
     serviceCategory: {
-      type: String, // dynamic
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ServiceCategory",
     },
     experience: {
       type: String,
