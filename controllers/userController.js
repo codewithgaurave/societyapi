@@ -314,10 +314,10 @@ export const setMyTatkalStatus = async (req, res) => {
   }
 };
 
-// ✅ PUBLIC: list all tatkal-enabled society service users
+// ✅ PUBLIC: list all tatkal-enabled society service users with availability
 export const listTatkalUsers = async (req, res) => {
   try {
-    const { serviceCategoryId, pincode } = req.query;
+    const { serviceCategoryId, pincode, colonyId, date } = req.query;
 
     const filter = {
       tatkalEnabled: true,
@@ -328,9 +328,25 @@ export const listTatkalUsers = async (req, res) => {
     if (serviceCategoryId) filter.serviceCategory = serviceCategoryId;
     if (pincode) filter.pincode = Number(pincode);
 
-    const users = await User.find(filter, "-password")
+    let users = await User.find(filter, "-password")
       .populate("serviceCategory", "name description")
       .lean();
+
+    // ✅ Filter by availability if location/date specified
+    if (colonyId || date) {
+      const { default: Availability } = await import("../models/Availability.js");
+      
+      const availabilityFilter = { isAvailable: true };
+      if (colonyId) availabilityFilter.colonies = colonyId;
+      if (date) availabilityFilter.date = new Date(date);
+
+      const availableUsers = await Availability.find(availabilityFilter)
+        .populate("user", "_id")
+        .lean();
+      
+      const availableUserIds = availableUsers.map(av => av.user._id.toString());
+      users = users.filter(user => availableUserIds.includes(user._id.toString()));
+    }
 
     return res.json({ users });
   } catch (err) {
@@ -339,10 +355,10 @@ export const listTatkalUsers = async (req, res) => {
   }
 };
 
-// ✅ PUBLIC: list tatkal-enabled society service users by pincode
+// ✅ PUBLIC: list tatkal-enabled society service users by pincode with availability
 export const listTatkalUsersByPincode = async (req, res) => {
   try {
-    const { pincode, serviceCategoryId } = req.query;
+    const { pincode, serviceCategoryId, date, colonyId } = req.query;
 
     if (!pincode) {
       return res.status(400).json({
@@ -357,16 +373,41 @@ export const listTatkalUsersByPincode = async (req, res) => {
       pincode: Number(pincode),
     };
 
-    // optional filter by service category ID
     if (serviceCategoryId) {
       filter.serviceCategory = serviceCategoryId;
     }
 
-    const users = await User.find(filter, "-password")
+    let users = await User.find(filter, "-password")
       .populate("serviceCategory", "name description")
       .lean();
 
-    // ✅ SAME RESPONSE FORMAT
+    // ✅ Filter by availability and location
+    const { default: Availability } = await import("../models/Availability.js");
+    const { default: Colony } = await import("../models/Colony.js");
+    
+    const availabilityFilter = { isAvailable: true };
+    
+    // Filter by colony or pincode-based colonies
+    if (colonyId) {
+      availabilityFilter.colonies = colonyId;
+    } else {
+      // Find colonies in this pincode
+      const colonies = await Colony.find({ pincode: Number(pincode) }).lean();
+      const colonyIds = colonies.map(c => c._id);
+      if (colonyIds.length > 0) {
+        availabilityFilter.colonies = { $in: colonyIds };
+      }
+    }
+    
+    if (date) availabilityFilter.date = new Date(date);
+
+    const availableUsers = await Availability.find(availabilityFilter)
+      .populate("user", "_id")
+      .lean();
+    
+    const availableUserIds = availableUsers.map(av => av.user._id.toString());
+    users = users.filter(user => availableUserIds.includes(user._id.toString()));
+
     return res.json({ users });
   } catch (err) {
     console.error("listTatkalUsersByPincode error:", err);
@@ -624,7 +665,7 @@ export const getAllSocietyServiceUsers = async (req, res) => {
   }
 };
 
-// ✅ PUBLIC: get society service users by location (safe)
+// ✅ PUBLIC: get society service users by location with availability filtering
 export const getSocietyServiceUsersByLocation = async (req, res) => {
   try {
     const { pincode, serviceCategoryId } = req.query;
@@ -648,7 +689,8 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
 
     console.log('🔍 Searching for users with filter:', filter);
 
-    const users = await User.find(
+    // Get users registered in this pincode
+    const registeredUsers = await User.find(
       filter,
       `fullName mobileNumber whatsappNumber email registrationID
        profileImage role serviceCategory experience tatkalEnabled
@@ -658,24 +700,60 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    console.log(`✅ Found ${users.length} users for pincode ${pincode}`);
-
-    // If no users found, let's check what users exist in the database
-    if (users.length === 0) {
-      const allUsers = await User.find({ role: "society service" }, "pincode fullName role").lean();
-      console.log('📋 All society service users in database:', allUsers.map(u => ({ name: u.fullName, pincode: u.pincode, role: u.role })));
+    // Get users who have availability in this pincode's colonies
+    const { default: Availability } = await import("../models/Availability.js");
+    const { default: Colony } = await import("../models/Colony.js");
+    
+    const colonies = await Colony.find({ pincode: Number(pincode) }).lean();
+    const colonyIds = colonies.map(c => c._id);
+    
+    let availableUsers = [];
+    if (colonyIds.length > 0) {
+      const availabilityFilter = {
+        isAvailable: true,
+        colonies: { $in: colonyIds }
+      };
+      
+      const availabilities = await Availability.find(availabilityFilter)
+        .populate({
+          path: "user",
+          match: { isBlocked: false, role: "society service" },
+          select: `fullName mobileNumber whatsappNumber email registrationID
+                   profileImage role serviceCategory experience tatkalEnabled
+                   pincode address otherCharges serviceCharge`,
+          populate: {
+            path: "serviceCategory",
+            select: "name description"
+          }
+        })
+        .lean();
+      
+      availableUsers = availabilities
+        .filter(av => av.user && (!serviceCategoryId || av.user.serviceCategory?._id?.toString() === serviceCategoryId))
+        .map(av => av.user);
     }
 
+    // Combine and deduplicate users
+    const userMap = new Map();
+    
+    registeredUsers.forEach(user => {
+      userMap.set(user._id.toString(), user);
+    });
+    
+    availableUsers.forEach(user => {
+      userMap.set(user._id.toString(), user);
+    });
+    
+    const allUsers = Array.from(userMap.values());
+
+    console.log(`✅ Found ${allUsers.length} users for pincode ${pincode}`);
+
     return res.json({
-      count: users.length,
-      users,
+      count: allUsers.length,
+      users: allUsers,
       filters: {
         pincode: Number(pincode),
         serviceCategoryId
-      },
-      debug: {
-        searchFilter: filter,
-        totalFound: users.length
       }
     });
   } catch (err) {
