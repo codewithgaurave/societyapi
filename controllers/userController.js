@@ -591,6 +591,39 @@ export const getAllUsersPublic = async (req, res) => {
 };
 
 
+// ✅ DEBUG: Get all society service users (for debugging)
+export const getAllSocietyServiceUsers = async (req, res) => {
+  try {
+    const users = await User.find(
+      { 
+        role: "society service",
+        isBlocked: false 
+      },
+      `fullName mobileNumber pincode role serviceCategory address`
+    )
+      .populate("serviceCategory", "name")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    console.log(`📋 Found ${users.length} society service users in database`);
+    
+    return res.json({
+      count: users.length,
+      users: users.map(user => ({
+        fullName: user.fullName,
+        mobileNumber: user.mobileNumber,
+        pincode: user.pincode,
+        role: user.role,
+        serviceCategory: user.serviceCategory,
+        address: user.address
+      }))
+    });
+  } catch (err) {
+    console.error("getAllSocietyServiceUsers error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ✅ PUBLIC: get society service users by location (safe)
 export const getSocietyServiceUsersByLocation = async (req, res) => {
   try {
@@ -608,10 +641,12 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
       pincode: Number(pincode),
     };
 
-    // Filter by service category ID
+    // Filter by service category ID (optional)
     if (serviceCategoryId) {
       filter.serviceCategory = serviceCategoryId;
     }
+
+    console.log('🔍 Searching for users with filter:', filter);
 
     const users = await User.find(
       filter,
@@ -623,12 +658,24 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    console.log(`✅ Found ${users.length} users for pincode ${pincode}`);
+
+    // If no users found, let's check what users exist in the database
+    if (users.length === 0) {
+      const allUsers = await User.find({ role: "society service" }, "pincode fullName role").lean();
+      console.log('📋 All society service users in database:', allUsers.map(u => ({ name: u.fullName, pincode: u.pincode, role: u.role })));
+    }
+
     return res.json({
       count: users.length,
       users,
       filters: {
         pincode: Number(pincode),
         serviceCategoryId
+      },
+      debug: {
+        searchFilter: filter,
+        totalFound: users.length
       }
     });
   } catch (err) {

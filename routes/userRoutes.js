@@ -13,6 +13,7 @@ import {
   getUserDetailsById,
   getAllUsersPublic,     
   getSocietyServiceUsersByLocation,
+  getAllSocietyServiceUsers,
   listTatkalUsersByPincode,
 } from "../controllers/userController.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -65,6 +66,12 @@ router.delete("/:id", requireAuth, deleteUser);
 router.get(
   "/public/society-service/by-location",
   getSocietyServiceUsersByLocation
+);
+
+// 🔹 DEBUG: get all society service users
+router.get(
+  "/debug/society-service/all",
+  getAllSocietyServiceUsers
 );
 
 
