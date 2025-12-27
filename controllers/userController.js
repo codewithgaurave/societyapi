@@ -177,12 +177,20 @@ export const getMyProfile = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const user = await User.findById(userId).lean();
+    const user = await User.findById(userId)
+      .populate("serviceCategory", "name description")
+      .lean();
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    return res.json({ user });
+    // Add serviceName field for easy access
+    const userWithServiceName = {
+      ...user,
+      serviceName: user.serviceCategory?.name || null
+    };
+
+    return res.json({ user: userWithServiceName });
   } catch (err) {
     console.error("getMyProfile error:", err);
     return res.status(500).json({ message: "Server error" });
