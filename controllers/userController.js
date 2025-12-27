@@ -177,17 +177,23 @@ export const getMyProfile = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const user = await User.findById(userId)
-      .populate("serviceCategory", "name description")
-      .lean();
+    const user = await User.findById(userId).lean();
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Add serviceName field for easy access
+    // Get service category name if exists
+    let serviceName = null;
+    if (user.serviceCategory) {
+      const ServiceCategory = (await import("../models/ServiceCategory.js")).default;
+      const category = await ServiceCategory.findById(user.serviceCategory).lean();
+      serviceName = category?.name || null;
+    }
+
+    // Add serviceName field
     const userWithServiceName = {
       ...user,
-      serviceName: user.serviceCategory?.name || null
+      serviceName
     };
 
     return res.json({ user: userWithServiceName });
