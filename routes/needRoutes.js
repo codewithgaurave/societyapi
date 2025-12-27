@@ -7,6 +7,7 @@ import {
   deleteNeed,
   getNeedWithUserDetails,
   getColonySpecificNeeds,
+  getNeedsByServiceCategoryAndPincode,
 } from "../controllers/needController.js";
 // import { requireAuth } from "../middleware/auth.js"; // agar auth se karna ho
 
@@ -18,6 +19,9 @@ router.post("/", createNeed);
 
 // 🔹 Get all needs (public, with filters)
 router.get("/", getAllNeeds);
+
+// 🔹 NEW: Get needs by service category and pincode
+router.get("/by-location", getNeedsByServiceCategoryAndPincode);
 
 // 🔹 Get needs of a specific user
 router.get("/user/:userId", getNeedsByUser);

@@ -330,3 +330,59 @@ export const getColonySpecificNeeds = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+// ✅ NEW: Get needs by service category and pincode
+export const getNeedsByServiceCategoryAndPincode = async (req, res) => {
+  try {
+    const { serviceCategoryId, pincode } = req.query;
+
+    if (!serviceCategoryId || !pincode) {
+      return res.status(400).json({
+        message: "serviceCategoryId and pincode are required"
+      });
+    }
+
+    // Find colonies with matching pincode
+    const colonies = await Colony.find({ 
+      pincode: Number(pincode),
+      isActive: true 
+    }).lean();
+
+    if (colonies.length === 0) {
+      return res.json({
+        message: "No active colonies found for this pincode",
+        needs: [],
+        filters: { serviceCategoryId, pincode: Number(pincode) }
+      });
+    }
+
+    const colonyIds = colonies.map(colony => colony._id);
+
+    // Find needs matching service category and colonies
+    const needs = await Need.find({
+      serviceCategory: serviceCategoryId,
+      colony: { $in: colonyIds },
+      status: "open"
+    })
+    .populate("user", "fullName mobileNumber registrationID role address pincode")
+    .populate("serviceCategory", "name description")
+    .populate("colony", "name address city pincode")
+    .sort({ createdAt: -1 })
+    .lean();
+
+    return res.json({
+      message: `Found ${needs.length} needs for the specified category and location`,
+      count: needs.length,
+      needs,
+      colonies,
+      filters: {
+        serviceCategoryId,
+        pincode: Number(pincode)
+      }
+    });
+
+  } catch (err) {
+    console.error("getNeedsByServiceCategoryAndPincode error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
