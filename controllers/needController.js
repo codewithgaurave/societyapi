@@ -331,10 +331,72 @@ export const getColonySpecificNeeds = async (req, res) => {
   }
 };
 
-// ✅ NEW: Get needs by service category and pincode
+// ✅ Get needs for logged-in user based on their availability colonies
+// GET /api/needs/my-available-needs/:userId
+export const getMyAvailableNeeds = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId)
+      .populate("serviceCategory", "name")
+      .lean();
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const availabilityRecords = await Availability.find({
+      user: userId,
+      isAvailable: true
+    })
+    .select("colonies")
+    .lean();
+
+    const colonyIds = [];
+    availabilityRecords.forEach(record => {
+      if (record.colonies && Array.isArray(record.colonies)) {
+        record.colonies.forEach(colonyId => {
+          if (!colonyIds.includes(colonyId.toString())) {
+            colonyIds.push(colonyId.toString());
+          }
+        });
+      }
+    });
+
+    if (colonyIds.length === 0) {
+      return res.json({
+        message: "Pehle availability set karein",
+        needs: []
+      });
+    }
+
+    const needs = await Need.find({
+      serviceCategory: user.serviceCategory._id,
+      colony: { $in: colonyIds },
+      status: "open"
+    })
+    .populate("user", "fullName mobileNumber registrationID")
+    .populate("serviceCategory", "name")
+    .populate("colony", "name address city pincode")
+    .sort({ createdAt: -1 })
+    .lean();
+
+    return res.json({
+      message: `${needs.length} needs milein aapki available colonies mein`,
+      count: needs.length,
+      needs
+    });
+
+  } catch (err) {
+    console.error("getMyAvailableNeeds error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ NEW: Get needs by service category and pincode with availability filtering
 export const getNeedsByServiceCategoryAndPincode = async (req, res) => {
   try {
-    const { serviceCategoryId, pincode } = req.query;
+    const { serviceCategoryId, pincode, userId } = req.query;
 
     if (!serviceCategoryId || !pincode) {
       return res.status(400).json({
@@ -342,21 +404,46 @@ export const getNeedsByServiceCategoryAndPincode = async (req, res) => {
       });
     }
 
-    // Find colonies with matching pincode
-    const colonies = await Colony.find({ 
-      pincode: Number(pincode),
-      isActive: true 
-    }).lean();
+    let colonyIds = [];
 
-    if (colonies.length === 0) {
+    // If userId provided, get colonies where user has availability
+    if (userId) {
+      const availabilityRecords = await Availability.find({
+        user: userId,
+        isAvailable: true
+      })
+      .select("colonies")
+      .lean();
+
+      const userColonyIds = [];
+      availabilityRecords.forEach(record => {
+        if (record.colonies && Array.isArray(record.colonies)) {
+          record.colonies.forEach(colonyId => {
+            if (!userColonyIds.includes(colonyId.toString())) {
+              userColonyIds.push(colonyId.toString());
+            }
+          });
+        }
+      });
+      colonyIds = userColonyIds;
+    } else {
+      // If no userId, find all colonies with matching pincode
+      const colonies = await Colony.find({ 
+        pincode: Number(pincode),
+        isActive: true 
+      }).lean();
+      colonyIds = colonies.map(colony => colony._id);
+    }
+
+    if (colonyIds.length === 0) {
       return res.json({
-        message: "No active colonies found for this pincode",
+        message: userId ? "No availability set in any colony. Set availability first." : "No active colonies found for this pincode",
+        count: 0,
         needs: [],
+        colonies: [],
         filters: { serviceCategoryId, pincode: Number(pincode) }
       });
     }
-
-    const colonyIds = colonies.map(colony => colony._id);
 
     // Find needs matching service category and colonies
     const needs = await Need.find({
@@ -369,6 +456,9 @@ export const getNeedsByServiceCategoryAndPincode = async (req, res) => {
     .populate("colony", "name address city pincode")
     .sort({ createdAt: -1 })
     .lean();
+
+    // Get colony details for response
+    const colonies = await Colony.find({ _id: { $in: colonyIds } }).lean();
 
     return res.json({
       message: `Found ${needs.length} needs for the specified category and location`,

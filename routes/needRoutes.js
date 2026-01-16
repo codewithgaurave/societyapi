@@ -8,6 +8,7 @@ import {
   getNeedWithUserDetails,
   getColonySpecificNeeds,
   getNeedsByServiceCategoryAndPincode,
+  getMyAvailableNeeds,
 } from "../controllers/needController.js";
 // import { requireAuth } from "../middleware/auth.js"; // agar auth se karna ho
 
@@ -22,6 +23,9 @@ router.get("/", getAllNeeds);
 
 // 🔹 NEW: Get needs by service category and pincode
 router.get("/by-location", getNeedsByServiceCategoryAndPincode);
+
+// 🔹 Get needs based on user's availability colonies
+router.get("/my-available-needs/:userId", getMyAvailableNeeds);
 
 // 🔹 Get needs of a specific user
 router.get("/user/:userId", getNeedsByUser);
