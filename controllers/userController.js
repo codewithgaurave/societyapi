@@ -114,6 +114,35 @@ export const registerUser = async (req, res) => {
   }
 };
 
+// ✅ Forget Password (reset by mobileNumber)
+export const forgetPassword = async (req, res) => {
+  try {
+    const { mobileNumber, newPassword } = req.body;
+
+    if (!mobileNumber || !newPassword) {
+      return res.status(400).json({
+        message: "mobileNumber and newPassword are required",
+      });
+    }
+
+    const user = await User.findOne({ mobileNumber });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    user.password = hash;
+    await user.save();
+
+    return res.json({
+      message: "Password reset successfully",
+    });
+  } catch (err) {
+    console.error("forgetPassword error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ✅ User Login (by mobileNumber + password)
 export const loginUser = async (req, res) => {
   try {

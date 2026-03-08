@@ -2,6 +2,7 @@ import express from "express";
 import {
   registerUser,
   loginUser,
+  forgetPassword,
   getMyProfile,
   listUsers,
   setUserBlockStatus,
@@ -40,6 +41,9 @@ router.post("/register", uploadUserFields, registerUser);
 
 // 🔹 Login
 router.post("/login", loginUser);
+
+// 🔹 Forget Password
+router.post("/forget-password", forgetPassword);
 
 // 🔹 User: own profile
 router.get("/me", requireAuth, getMyProfile);
