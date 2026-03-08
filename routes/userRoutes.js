@@ -2,7 +2,8 @@ import express from "express";
 import {
   registerUser,
   loginUser,
-  forgetPassword,
+  verifyMobileForReset,
+  resetPassword,
   getMyProfile,
   listUsers,
   setUserBlockStatus,
@@ -42,8 +43,11 @@ router.post("/register", uploadUserFields, registerUser);
 // 🔹 Login
 router.post("/login", loginUser);
 
-// 🔹 Forget Password
-router.post("/forget-password", forgetPassword);
+// 🔹 Forget Password - Step 1: Verify mobile number
+router.post("/forget-password/verify", verifyMobileForReset);
+
+// 🔹 Forget Password - Step 2: Reset password
+router.post("/forget-password/reset", resetPassword);
 
 // 🔹 User: own profile
 router.get("/me", requireAuth, getMyProfile);

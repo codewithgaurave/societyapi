@@ -114,8 +114,33 @@ export const registerUser = async (req, res) => {
   }
 };
 
-// ✅ Forget Password (reset by mobileNumber)
-export const forgetPassword = async (req, res) => {
+// ✅ Step 1: Verify mobile number and return user name
+export const verifyMobileForReset = async (req, res) => {
+  try {
+    const { mobileNumber } = req.body;
+
+    if (!mobileNumber) {
+      return res.status(400).json({ message: "mobileNumber is required" });
+    }
+
+    const user = await User.findOne({ mobileNumber }).lean();
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.json({
+      message: "User found",
+      fullName: user.fullName,
+      mobileNumber: user.mobileNumber,
+    });
+  } catch (err) {
+    console.error("verifyMobileForReset error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ Step 2: Reset password with mobile number and new password
+export const resetPassword = async (req, res) => {
   try {
     const { mobileNumber, newPassword } = req.body;
 
@@ -138,7 +163,7 @@ export const forgetPassword = async (req, res) => {
       message: "Password reset successfully",
     });
   } catch (err) {
-    console.error("forgetPassword error:", err);
+    console.error("resetPassword error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
