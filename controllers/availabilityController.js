@@ -23,6 +23,7 @@ const normalizeColonyIds = (colonyIds) => {
 };
 
 // ✅ Add availability (by token - logged in user)
+// availabilityType: "single" | "range" | "always"
 export const addMyAvailability = async (req, res) => {
   try {
     const userId = req.user?.sub;
@@ -30,47 +31,66 @@ export const addMyAvailability = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const { date, startTime, endTime, isAvailable, notes, colonyIds } = req.body;
+    const {
+      availabilityType = "single",
+      date,
+      startDate,
+      endDate,
+      startTime,
+      endTime,
+      isAvailable,
+      notes,
+      colonyIds
+    } = req.body;
 
-    if (!date || !startTime || !endTime) {
-      return res
-        .status(400)
-        .json({ message: "date, startTime, endTime are required" });
+    if (!startTime || !endTime) {
+      return res.status(400).json({ message: "startTime aur endTime required hain" });
     }
 
     if (!isValidTime(startTime) || !isValidTime(endTime)) {
-      return res
-        .status(400)
-        .json({ message: "startTime/endTime must be in HH:mm format" });
+      return res.status(400).json({ message: "startTime/endTime HH:mm format mein hona chahiye" });
+    }
+
+    if (!["single", "range", "always"].includes(availabilityType)) {
+      return res.status(400).json({ message: "availabilityType: single, range, ya always hona chahiye" });
     }
 
     const user = await User.findById(userId).lean();
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
+    if (!user) return res.status(404).json({ message: "User not found" });
     if (user.role !== "society service") {
-      return res
-        .status(400)
-        .json({ message: "Only society service users can set availability" });
-    }
-
-    const dateObj = new Date(date);
-    if (Number.isNaN(dateObj.getTime())) {
-      return res.status(400).json({ message: "Invalid date format" });
+      return res.status(400).json({ message: "Only society service users can set availability" });
     }
 
     const coloniesArr = normalizeColonyIds(colonyIds);
-
-    const availability = await Availability.create({
+    const availData = {
       user: userId,
-      date: dateObj,
+      availabilityType,
       startTime,
       endTime,
       isAvailable: typeof isAvailable === "boolean" ? isAvailable : true,
       notes,
       colonies: coloniesArr,
-    });
+    };
+
+    if (availabilityType === "single") {
+      if (!date) return res.status(400).json({ message: "single type ke liye date required hai" });
+      const d = new Date(date);
+      if (Number.isNaN(d.getTime())) return res.status(400).json({ message: "Invalid date" });
+      availData.date = d;
+
+    } else if (availabilityType === "range") {
+      if (!startDate || !endDate) return res.status(400).json({ message: "range type ke liye startDate aur endDate required hain" });
+      const s = new Date(startDate);
+      const e = new Date(endDate);
+      if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return res.status(400).json({ message: "Invalid date format" });
+      if (e < s) return res.status(400).json({ message: "endDate, startDate se pehle nahi ho sakti" });
+      availData.startDate = s;
+      availData.endDate = e;
+
+    }
+    // always type ke liye koi date nahi chahiye
+
+    const availability = await Availability.create(availData);
 
     const populated = await Availability.findById(availability._id)
       .populate("user", "fullName mobileNumber serviceCategory role tatkalEnabled")

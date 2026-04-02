@@ -10,10 +10,25 @@ const availabilitySchema = new mongoose.Schema(
       index: true,
     },
 
-    // jis date ke liye availability hai (e.g. 2025-03-01)
+    // 🔹 Type of availability:
+    // "single"  - ek specific date ke liye
+    // "range"   - startDate se endDate tak
+    // "always"  - permanent (koi date nahi)
+    availabilityType: {
+      type: String,
+      enum: ["single", "range", "always"],
+      default: "single",
+    },
+
+    // single / range ke liye date fields
     date: {
-      type: Date,
-      required: true,
+      type: Date, // single type ke liye
+    },
+    startDate: {
+      type: Date, // range type ke liye
+    },
+    endDate: {
+      type: Date, // range type ke liye
     },
 
     // HH:mm format e.g. "09:00", "18:30"

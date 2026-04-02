@@ -337,17 +337,26 @@ export const getMyAvailableNeeds = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const user = await User.findById(userId)
-      .populate("serviceCategory", "name")
-      .lean();
-    
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user.serviceCategory) return res.status(400).json({ message: "User ki service category set nahi hai" });
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // single: aaj ki date match karo
+    // range: aaj startDate aur endDate ke beech ho
+    // always: koi date check nahi
     const availabilityRecords = await Availability.find({
       user: userId,
-      isAvailable: true
+      isAvailable: true,
+      $or: [
+        { availabilityType: "always" },
+        { availabilityType: "single", date: { $gte: today } },
+        { availabilityType: "range", startDate: { $lte: today }, endDate: { $gte: today } },
+        // range jo aage bhi chalegi
+        { availabilityType: "range", startDate: { $gte: today } },
+      ]
     })
     .select("colonies")
     .lean();
@@ -364,14 +373,11 @@ export const getMyAvailableNeeds = async (req, res) => {
     });
 
     if (colonyIds.length === 0) {
-      return res.json({
-        message: "Pehle availability set karein",
-        needs: []
-      });
+      return res.json({ message: "Pehle availability set karein", needs: [] });
     }
 
     const needs = await Need.find({
-      serviceCategory: user.serviceCategory._id,
+      serviceCategory: user.serviceCategory,
       colony: { $in: colonyIds },
       status: "open"
     })
