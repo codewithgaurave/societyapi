@@ -99,28 +99,42 @@ export const registerUser = async (req, res) => {
           };
         }
         
-        // Robust extraction of city and state
-        const components = result.address_components;
-        components.forEach(comp => {
-          const types = comp.types;
-          // City priority: locality -> administrative_area_level_2 -> sublocality
-          if (types.includes("locality") && !cityData) {
-            cityData = comp.long_name;
-          } else if (types.includes("administrative_area_level_2") && !cityData) {
-            cityData = comp.long_name;
-          } else if (types.includes("sublocality_level_1") && !cityData) {
-            cityData = comp.long_name;
-          }
+        // Loop through all results until we find city and state
+        for (const res of geoResponse.data.results) {
+          const components = res.address_components;
+          
+          components.forEach(comp => {
+            const types = comp.types;
+            
+            // ✅ IMPROVED CITY EXTRACTION (Exhaustive search)
+            if (!cityData) {
+              if (types.includes("locality") || 
+                  types.includes("administrative_area_level_2") || 
+                  types.includes("administrative_area_level_3") || 
+                  types.includes("sublocality_level_1") ||
+                  types.includes("sublocality") ||
+                  types.includes("political")) {
+                cityData = comp.long_name;
+              }
+            }
 
-          // State priority: administrative_area_level_1
-          if (types.includes("administrative_area_level_1")) {
-            stateData = comp.long_name;
-          }
-        });
+            // ✅ IMPROVED STATE EXTRACTION
+            if (!stateData) {
+              if (types.includes("administrative_area_level_1")) {
+                stateData = comp.long_name;
+              }
+            }
+          });
+
+          if (cityData && stateData) break; // Found both, stop searching results
+        }
+
+        // Final redundancy: fallback to fullAddress parsing if still null
+        if (!cityData) cityData = result.address_components.find(c => c.types.includes("administrative_area_level_2"))?.long_name || "Unknown City";
+        if (!stateData) stateData = result.address_components.find(c => c.types.includes("administrative_area_level_1"))?.long_name || "Unknown State";
 
         // Address redundancy check: 
-        // If Google's formatted address is identical to what user typed/selected, 
-        // we keep fullAddress as null or different.
+        // If Google's formatted address is identical to what user typed/selected, we keep fullAddress as null
         const formatted = result.formatted_address;
         if (formatted && formatted.toLowerCase() !== address.toLowerCase()) {
           fullAddressData = formatted;
