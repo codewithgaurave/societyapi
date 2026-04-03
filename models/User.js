@@ -75,6 +75,28 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
 
+    // Location fields (auto-captured from Google Maps Geocoding)
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point"
+      },
+      coordinates: {
+        type: [Number],  // [longitude, latitude]
+        default: [0, 0]
+      }
+    },
+    fullAddress: {
+      type: String,
+    },
+    city: {
+      type: String,
+    },
+    state: {
+      type: String,
+    },
+
     // IST timestamps
     createdAtIST: { type: String },
     updatedAtIST: { type: String },
@@ -83,6 +105,9 @@ const userSchema = new mongoose.Schema(
 );
 
 // Helper: generate unique USR-XXXXXX ID
+// 2dsphere index for location queries
+userSchema.index({ location: "2dsphere" });
+
 userSchema.statics.generateRegistrationID = async function () {
   const User = this;
   let unique = false;

@@ -1,6 +1,7 @@
 // controllers/userController.js
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import axios from "axios";
 import User from "../models/User.js";
 
 // ✅ NEW imports for combined details
@@ -64,6 +65,40 @@ export const registerUser = async (req, res) => {
     const hash = await bcrypt.hash(password, SALT_ROUNDS);
     const profileImage = req.file?.path || req.file?.secure_url || null;
 
+    // ✅ Geocode address using Google Maps API
+    let locationData = { type: "Point", coordinates: [0, 0] };
+    let fullAddressData = address;
+    let cityData = null;
+    let stateData = null;
+
+    try {
+      const addressString = `${address}, ${pincode}, India`;
+      const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressString)}&key=${process.env.GOOGLE_MAP_API_KEY}`;
+      
+      const geoResponse = await axios.get(geoUrl, { timeout: 5000 });
+      
+      if (geoResponse.data.status === "OK" && geoResponse.data.results.length > 0) {
+        const result = geoResponse.data.results[0];
+        const geometry = result.geometry;
+        
+        locationData = {
+          type: "Point",
+          coordinates: [geometry.location.lng, geometry.location.lat]
+        };
+        fullAddressData = result.formatted_address;
+        
+        // Extract city and state from address components
+        const components = result.address_components;
+        components.forEach(comp => {
+          if (comp.types.includes("locality")) cityData = comp.long_name;
+          if (comp.types.includes("administrative_area_level_1")) stateData = comp.long_name;
+        });
+      }
+    } catch (geoErr) {
+      console.error("Geocoding error:", geoErr.message);
+      // Continue without failing registration
+    }
+
     const user = await User.create({
       // registrationID auto-generate hoga model ke pre('validate') se
       profileImage,
@@ -79,8 +114,11 @@ export const registerUser = async (req, res) => {
       experience,
       adharCard,
       serviceCharge,
-      otherCharges, // ✅ Changed from perHourCharge to otherCharges
-      // tatkalEnabled default false hi rahega
+      otherCharges,
+      location: locationData,
+      fullAddress: fullAddressData,
+      city: cityData,
+      state: stateData,
     });
 
     const token = signUserJwt(user);
@@ -104,6 +142,10 @@ export const registerUser = async (req, res) => {
         otherCharges: user.otherCharges, // ✅ Changed from perHourCharge to otherCharges
         profileImage: user.profileImage,
         tatkalEnabled: user.tatkalEnabled,
+        location: user.location,
+        fullAddress: user.fullAddress,
+        city: user.city,
+        state: user.state,
         createdAt: user.createdAt,
       },
       token,
@@ -214,6 +256,10 @@ export const loginUser = async (req, res) => {
         otherCharges: user.otherCharges, // ✅ Changed from perHourCharge to otherCharges
         profileImage: user.profileImage,
         tatkalEnabled: user.tatkalEnabled,
+        location: user.location,
+        fullAddress: user.fullAddress,
+        city: user.city,
+        state: user.state,
       },
       token,
     });
