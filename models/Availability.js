@@ -58,12 +58,37 @@ const availabilitySchema = new mongoose.Schema(
       },
     ],
 
+    // 🔹 New: Manual/Autofetch location (Optional if not in Colony list)
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point"
+      },
+      coordinates: {
+        type: [Number], // [lng, lat]
+        default: [0, 0]
+      }
+    },
+    address: {
+      type: String, // Manual or Google's full address
+    },
+    city: {
+      type: String,
+    },
+    state: {
+      type: String,
+    },
+
     // IST timestamps
     createdAtIST: { type: String },
     updatedAtIST: { type: String },
   },
   { timestamps: true }
 );
+
+// 2dsphere index for location-based availability queries
+availabilitySchema.index({ location: "2dsphere" });
 
 // ✅ IST on save
 availabilitySchema.pre("save", function (next) {

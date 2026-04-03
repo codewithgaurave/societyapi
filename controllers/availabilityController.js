@@ -1,6 +1,7 @@
 // controllers/availabilityController.js
 import Availability from "../models/Availability.js";
 import User from "../models/User.js";
+import axios from "axios";
 
 // Helper: HH:mm basic validation
 const isValidTime = (t) => /^\d{2}:\d{2}$/.test(t);
@@ -40,7 +41,10 @@ export const addMyAvailability = async (req, res) => {
       endTime,
       isAvailable,
       notes,
-      colonyIds
+      colonyIds,
+      lat, // ✅ GPS
+      lng, // ✅ GPS
+      address, // ✅ Manual address
     } = req.body;
 
     if (!startTime || !endTime) {
@@ -62,6 +66,60 @@ export const addMyAvailability = async (req, res) => {
     }
 
     const coloniesArr = normalizeColonyIds(colonyIds);
+
+    // ✅ Location Geocoding Logic
+    let locationData = { type: "Point", coordinates: [0, 0] };
+    let cityData = null;
+    let stateData = null;
+    let finalAddress = address;
+
+    if (lat && lng) {
+      locationData = {
+        type: "Point",
+        coordinates: [parseFloat(lng), parseFloat(lat)]
+      };
+    }
+
+    if ((lat && lng) || address) {
+      try {
+        const addressString = (lat && lng) ? `${lat},${lng}` : `${address}, India`;
+        const mode = (lat && lng) ? "latlng" : "address";
+        const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?${mode}=${encodeURIComponent(addressString)}&key=${process.env.GOOGLE_MAP_API_KEY}`;
+
+        const geoResponse = await axios.get(geoUrl, { timeout: 4000 });
+
+        if (geoResponse.data.status === "OK" && geoResponse.data.results.length > 0) {
+          const result = geoResponse.data.results[0];
+
+          if (!lat && !lng) {
+            locationData = {
+              type: "Point",
+              coordinates: [result.geometry.location.lng, result.geometry.location.lat]
+            };
+          }
+
+          if (!finalAddress) finalAddress = result.formatted_address;
+
+          // Exhaustive search through all results for city and state
+          for (const res of geoResponse.data.results) {
+            const compArr = res.address_components;
+            compArr.forEach(comp => {
+              const types = comp.types;
+              if (!cityData && (types.includes("locality") || types.includes("administrative_area_level_2") || types.includes("administrative_area_level_3") || types.includes("sublocality_level_1"))) {
+                cityData = comp.long_name;
+              }
+              if (!stateData && types.includes("administrative_area_level_1")) {
+                stateData = comp.long_name;
+              }
+            });
+            if (cityData && stateData) break;
+          }
+        }
+      } catch (geoErr) {
+        console.error("Availability geocoding error:", geoErr.message);
+      }
+    }
+
     const availData = {
       user: userId,
       availabilityType,
@@ -70,6 +128,10 @@ export const addMyAvailability = async (req, res) => {
       isAvailable: typeof isAvailable === "boolean" ? isAvailable : true,
       notes,
       colonies: coloniesArr,
+      location: locationData,
+      address: finalAddress,
+      city: cityData,
+      state: stateData
     };
 
     if (availabilityType === "single") {
@@ -112,7 +174,7 @@ export const updateAvailability = async (req, res) => {
   try {
     const auth = req.user || {};
     const { id } = req.params;
-    const { date, startTime, endTime, isAvailable, notes, colonyIds } = req.body;
+    const { date, startTime, endTime, isAvailable, notes, colonyIds, lat, lng, address } = req.body;
 
     const availability = await Availability.findById(id);
     if (!availability) {
@@ -157,6 +219,15 @@ export const updateAvailability = async (req, res) => {
     if (colonyIds !== undefined) {
       updates.colonies = normalizeColonyIds(colonyIds);
     }
+
+    // ✅ Location Updates
+    if (lat !== undefined && lng !== undefined) {
+      updates.location = {
+        type: "Point",
+        coordinates: [parseFloat(lng), parseFloat(lat)]
+      };
+    }
+    if (address !== undefined) updates.address = address;
 
     const updated = await Availability.findByIdAndUpdate(id, updates, {
       new: true,
