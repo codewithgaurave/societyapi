@@ -98,22 +98,49 @@ export const addMyAvailability = async (req, res) => {
             };
           }
 
-          if (!finalAddress) finalAddress = result.formatted_address;
-
-          // Exhaustive search through all results for city and state
+          // Exhaustive SEARCH through ALL results until we find city and state
           for (const res of geoResponse.data.results) {
-            const compArr = res.address_components;
-            compArr.forEach(comp => {
+            const components = res.address_components;
+            
+            components.forEach(comp => {
               const types = comp.types;
-              if (!cityData && (types.includes("locality") || types.includes("administrative_area_level_2") || types.includes("administrative_area_level_3") || types.includes("sublocality_level_1"))) {
-                cityData = comp.long_name;
+              
+              if (!cityData) {
+                if (types.includes("locality") || 
+                    types.includes("administrative_area_level_2") || 
+                    types.includes("sublocality_level_1") ||
+                    types.includes("sublocality")) {
+                  cityData = comp.long_name;
+                }
               }
-              if (!stateData && types.includes("administrative_area_level_1")) {
-                stateData = comp.long_name;
+
+              if (!stateData) {
+                if (types.includes("administrative_area_level_1")) {
+                  stateData = comp.long_name;
+                }
               }
             });
-            if (cityData && stateData) break;
+
+            if (cityData && stateData) break; 
           }
+
+          // Force Final fallbacks
+          if (!cityData) {
+            cityData = geoResponse.data.results[0]?.address_components?.find(c => 
+              c.types.includes("locality") || 
+              c.types.includes("administrative_area_level_2") ||
+              c.types.includes("sublocality_level_1")
+            )?.long_name || "Unknown City";
+          }
+          if (!stateData) {
+            stateData = geoResponse.data.results[0]?.address_components?.find(c => 
+              c.types.includes("administrative_area_level_1")
+            )?.long_name || "Unknown State";
+          }
+          
+          if (!finalAddress) finalAddress = geoResponse.data.results[0]?.formatted_address;
+
+          console.log(`📍 Availability Geocoding: City=${cityData}, State=${stateData}`);
         }
       } catch (geoErr) {
         console.error("Availability geocoding error:", geoErr.message);

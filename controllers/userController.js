@@ -1,13 +1,13 @@
 // controllers/userController.js
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import axios from "axios";
 import User from "../models/User.js";
 
 // ✅ NEW imports for combined details
 import Availability from "../models/Availability.js";
 import Holiday from "../models/Holiday.js";
 import ServiceTemplate from "../models/ServiceTemplate.js";
+import ServiceCategory from "../models/ServiceCategory.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.USER_JWT_EXPIRES_IN || "7d";
@@ -106,14 +106,12 @@ export const registerUser = async (req, res) => {
           components.forEach(comp => {
             const types = comp.types;
             
-            // ✅ IMPROVED CITY EXTRACTION (Exhaustive search)
+            // ✅ IMPROVED CITY EXTRACTION
             if (!cityData) {
               if (types.includes("locality") || 
                   types.includes("administrative_area_level_2") || 
-                  types.includes("administrative_area_level_3") || 
                   types.includes("sublocality_level_1") ||
-                  types.includes("sublocality") ||
-                  types.includes("political")) {
+                  types.includes("sublocality")) {
                 cityData = comp.long_name;
               }
             }
@@ -126,12 +124,24 @@ export const registerUser = async (req, res) => {
             }
           });
 
-          if (cityData && stateData) break; // Found both, stop searching results
+          if (cityData && stateData) break; 
         }
 
-        // Final redundancy: fallback to fullAddress parsing if still null
-        if (!cityData) cityData = result.address_components.find(c => c.types.includes("administrative_area_level_2"))?.long_name || "Unknown City";
-        if (!stateData) stateData = result.address_components.find(c => c.types.includes("administrative_area_level_1"))?.long_name || "Unknown State";
+        // Final fallback: if cityData still null, use the most likely component from any result
+        if (!cityData) {
+          cityData = geoResponse.data.results[0]?.address_components?.find(c => 
+            c.types.includes("locality") || 
+            c.types.includes("administrative_area_level_2") ||
+            c.types.includes("sublocality_level_1")
+          )?.long_name || "Unknown City";
+        }
+        if (!stateData) {
+          stateData = geoResponse.data.results[0]?.address_components?.find(c => 
+            c.types.includes("administrative_area_level_1")
+          )?.long_name || "Unknown State";
+        }
+
+        console.log(`📍 Geocoding Success: City=${cityData}, State=${stateData}`);
 
         // Address redundancy check: 
         // If Google's formatted address is identical to what user typed/selected, we keep fullAddress as null
