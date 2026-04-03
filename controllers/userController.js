@@ -41,7 +41,9 @@ export const registerUser = async (req, res) => {
       experience,
       adharCard,
       serviceCharge,
-      otherCharges, // ✅ Changed from perHourCharge to otherCharges
+      otherCharges,
+      lat, // ✅ Add lat
+      lng, // ✅ Add lng
     } = req.body;
 
     if (!fullName || !mobileNumber || !password || !address || !pincode || !role) {
@@ -65,26 +67,40 @@ export const registerUser = async (req, res) => {
     const hash = await bcrypt.hash(password, SALT_ROUNDS);
     const profileImage = req.file?.path || req.file?.secure_url || null;
 
-    // ✅ Geocode address using Google Maps API
+    // ✅ Location logic
     let locationData = { type: "Point", coordinates: [0, 0] };
     let fullAddressData = address;
     let cityData = null;
     let stateData = null;
 
+    // Priority 1: Use lat/lng if provided from frontend (more accurate)
+    if (lat && lng) {
+      locationData = {
+        type: "Point",
+        coordinates: [parseFloat(lng), parseFloat(lat)]
+      };
+      console.log("📍 Using provided lat/lng:", lat, lng);
+    } 
+
+    // Priority 2: Geocode address if lat/lng not provided or to get full address details
     try {
-      const addressString = `${address}, ${pincode}, India`;
-      const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressString)}&key=${process.env.GOOGLE_MAP_API_KEY}`;
+      const addressString = lat && lng ? `${lat},${lng}` : `${address}, ${pincode}, India`;
+      const mode = lat && lng ? "latlng" : "address";
+      const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?${mode}=${encodeURIComponent(addressString)}&key=${process.env.GOOGLE_MAP_API_KEY}`;
       
       const geoResponse = await axios.get(geoUrl, { timeout: 5000 });
       
       if (geoResponse.data.status === "OK" && geoResponse.data.results.length > 0) {
         const result = geoResponse.data.results[0];
-        const geometry = result.geometry;
         
-        locationData = {
-          type: "Point",
-          coordinates: [geometry.location.lng, geometry.location.lat]
-        };
+        if (!lat || !lng) {
+          const geometry = result.geometry;
+          locationData = {
+            type: "Point",
+            coordinates: [geometry.location.lng, geometry.location.lat]
+          };
+        }
+        
         fullAddressData = result.formatted_address;
         
         // Extract city and state from address components
@@ -96,11 +112,9 @@ export const registerUser = async (req, res) => {
       }
     } catch (geoErr) {
       console.error("Geocoding error:", geoErr.message);
-      // Continue without failing registration
     }
 
     const user = await User.create({
-      // registrationID auto-generate hoga model ke pre('validate') se
       profileImage,
       fullName,
       mobileNumber,
