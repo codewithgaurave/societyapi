@@ -69,23 +69,22 @@ export const registerUser = async (req, res) => {
 
     // ✅ Location logic
     let locationData = { type: "Point", coordinates: [0, 0] };
-    let fullAddressData = address;
+    let fullAddressData = null; // Start as null to avoid redundancy
     let cityData = null;
     let stateData = null;
 
-    // Priority 1: Use lat/lng if provided from frontend (more accurate)
+    // Priority 1: Use lat/lng if provided from frontend
     if (lat && lng) {
       locationData = {
         type: "Point",
         coordinates: [parseFloat(lng), parseFloat(lat)]
       };
-      console.log("📍 Using provided lat/lng:", lat, lng);
     } 
 
-    // Priority 2: Geocode address if lat/lng not provided or to get full address details
+    // Priority 2: Geocode to get robust details
     try {
-      const addressString = lat && lng ? `${lat},${lng}` : `${address}, ${pincode}, India`;
-      const mode = lat && lng ? "latlng" : "address";
+      const addressString = (lat && lng) ? `${lat},${lng}` : `${address}, ${pincode}, India`;
+      const mode = (lat && lng) ? "latlng" : "address";
       const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?${mode}=${encodeURIComponent(addressString)}&key=${process.env.GOOGLE_MAP_API_KEY}`;
       
       const geoResponse = await axios.get(geoUrl, { timeout: 5000 });
@@ -94,21 +93,38 @@ export const registerUser = async (req, res) => {
         const result = geoResponse.data.results[0];
         
         if (!lat || !lng) {
-          const geometry = result.geometry;
           locationData = {
             type: "Point",
-            coordinates: [geometry.location.lng, geometry.location.lat]
+            coordinates: [result.geometry.location.lng, result.geometry.location.lat]
           };
         }
         
-        fullAddressData = result.formatted_address;
-        
-        // Extract city and state from address components
+        // Robust extraction of city and state
         const components = result.address_components;
         components.forEach(comp => {
-          if (comp.types.includes("locality")) cityData = comp.long_name;
-          if (comp.types.includes("administrative_area_level_1")) stateData = comp.long_name;
+          const types = comp.types;
+          // City priority: locality -> administrative_area_level_2 -> sublocality
+          if (types.includes("locality") && !cityData) {
+            cityData = comp.long_name;
+          } else if (types.includes("administrative_area_level_2") && !cityData) {
+            cityData = comp.long_name;
+          } else if (types.includes("sublocality_level_1") && !cityData) {
+            cityData = comp.long_name;
+          }
+
+          // State priority: administrative_area_level_1
+          if (types.includes("administrative_area_level_1")) {
+            stateData = comp.long_name;
+          }
         });
+
+        // Address redundancy check: 
+        // If Google's formatted address is identical to what user typed/selected, 
+        // we keep fullAddress as null or different.
+        const formatted = result.formatted_address;
+        if (formatted && formatted.toLowerCase() !== address.toLowerCase()) {
+          fullAddressData = formatted;
+        }
       }
     } catch (geoErr) {
       console.error("Geocoding error:", geoErr.message);
