@@ -172,8 +172,8 @@ export const registerUser = async (req, res) => {
       otherCharges,
       location: locationData,
       fullAddress: fullAddressData,
-      city: cityData,
-      state: stateData,
+      // city: cityData,
+      // state: stateData,
     });
 
     const token = signUserJwt(user);
