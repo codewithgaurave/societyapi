@@ -9,10 +9,10 @@ import ServiceTemplate from "../models/ServiceTemplate.js";
 
 
 // ✅ Create need (society member need post karega)
-// Body: { userId, serviceCategoryId, colonyId, description }
+// Body: { userId, serviceCategoryId, colonyId, description, fullAddress?, lat?, lng? }
 export const createNeed = async (req, res) => {
   try {
-    const { userId, serviceCategoryId, colonyId, description } = req.body;
+    const { userId, serviceCategoryId, colonyId, description, fullAddress, lat, lng } = req.body;
 
     if (!userId || !serviceCategoryId || !colonyId || !description) {
       return res.status(400).json({
@@ -54,7 +54,10 @@ export const createNeed = async (req, res) => {
       serviceCategory: serviceCategoryId,
       colony: colonyId,
       description,
-      // status: "open" by default
+      // ✅ Save location data if provided
+      ...(fullAddress && { fullAddress }),
+      ...(lat !== undefined && lat !== null && { lat: parseFloat(lat) }),
+      ...(lng !== undefined && lng !== null && { lng: parseFloat(lng) }),
     });
 
     const populated = await Need.findById(need._id)

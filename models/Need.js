@@ -41,6 +41,11 @@ const needSchema = new mongoose.Schema(
       default: "open",
     },
 
+    // ✅ Location fields (GPS se auto-detect ya Places API se)
+    fullAddress: { type: String },
+    lat: { type: Number },
+    lng: { type: Number },
+
     // IST timestamps
     createdAtIST: { type: String },
     updatedAtIST: { type: String },
