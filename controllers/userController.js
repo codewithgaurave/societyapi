@@ -1,6 +1,7 @@
 // controllers/userController.js
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import axios from "axios";
 import User from "../models/User.js";
 
 // ✅ NEW imports for combined details
