@@ -19,11 +19,18 @@ const needSchema = new mongoose.Schema(
       index: true,
     },
 
-    // kis colony ke liye need hai
+    // kis colony ke liye need hai (optional agar pincode hai to)
     colony: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Colony",
-      required: true,
+      required: false,
+      index: true,
+    },
+
+    // Pincode (agar colony nahi select ki)
+    pincode: {
+      type: Number,
+      required: false,
       index: true,
     },
 

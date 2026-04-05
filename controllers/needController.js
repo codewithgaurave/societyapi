@@ -12,12 +12,12 @@ import ServiceTemplate from "../models/ServiceTemplate.js";
 // Body: { userId, serviceCategoryId, colonyId, description, fullAddress?, lat?, lng? }
 export const createNeed = async (req, res) => {
   try {
-    const { userId, serviceCategoryId, colonyId, description, fullAddress, lat, lng } = req.body;
+    const { userId, serviceCategoryId, colonyId, description, fullAddress, lat, lng, pincode } = req.body;
 
-    if (!userId || !serviceCategoryId || !colonyId || !description) {
+    if (!userId || !serviceCategoryId || (!colonyId && !pincode) || !description) {
       return res.status(400).json({
         message:
-          "userId, serviceCategoryId, colonyId aur description required hain",
+          "userId, serviceCategoryId, (colonyId ya pincode) aur description required hain",
       });
     }
 
@@ -41,24 +41,29 @@ export const createNeed = async (req, res) => {
         .json({ message: "Service category invalid ya inactive hai" });
     }
 
-    // colony check
-    const colony = await Colony.findById(colonyId).lean();
-    if (!colony || !colony.isActive) {
-      return res
-        .status(400)
-        .json({ message: "Colony invalid ya inactive hai" });
+    // colony check (sirf agar colonyId di hai)
+    if (colonyId) {
+      const colony = await Colony.findById(colonyId).lean();
+      if (!colony || !colony.isActive) {
+        return res
+          .status(400)
+          .json({ message: "Colony invalid ya inactive hai" });
+      }
     }
 
-    const need = await Need.create({
+    const needData = {
       user: userId,
       serviceCategory: serviceCategoryId,
-      colony: colonyId,
       description,
       // ✅ Save location data if provided
+      ...(colonyId && { colony: colonyId }),
+      ...(pincode && { pincode: Number(pincode) }),
       ...(fullAddress && { fullAddress }),
       ...(lat !== undefined && lat !== null && { lat: parseFloat(lat) }),
       ...(lng !== undefined && lng !== null && { lng: parseFloat(lng) }),
-    });
+    };
+
+    const need = await Need.create(needData);
 
     const populated = await Need.findById(need._id)
       .populate("user", "fullName mobileNumber registrationID role")
@@ -81,12 +86,13 @@ export const createNeed = async (req, res) => {
 // GET /api/needs?serviceCategoryId=...&colonyId=...&status=open
 export const getAllNeeds = async (req, res) => {
   try {
-    const { serviceCategoryId, colonyId, status } = req.query;
+    const { serviceCategoryId, colonyId, status, pincode } = req.query;
 
     const filter = {};
     if (serviceCategoryId) filter.serviceCategory = serviceCategoryId;
     if (colonyId) filter.colony = colonyId;
     if (status) filter.status = status;
+    if (pincode) filter.pincode = Number(pincode);
 
     const needs = await Need.find(filter)
       .populate("user", "fullName mobileNumber registrationID role")
