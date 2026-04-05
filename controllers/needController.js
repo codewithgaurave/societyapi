@@ -381,20 +381,58 @@ export const getMyAvailableNeeds = async (req, res) => {
       }
     });
 
+    // 4️⃣ Extract colony pincodes too for PIN-based needs
+    const colonies = await Colony.find({ _id: { $in: colonyIds } }).select("pincode").lean();
+    const colonyPincodes = colonies.map(c => Number(c.pincode)).filter(p => !isNaN(p));
+    const { lat: userLat, lng: userLng } = req.query;
+
     if (colonyIds.length === 0) {
       return res.json({ message: "Pehle availability set karein", needs: [] });
     }
 
-    const needs = await Need.find({
+    // 5️⃣ Find needs matching category and (colony OR pincode)
+    let needs = await Need.find({
       serviceCategory: user.serviceCategory,
-      colony: { $in: colonyIds },
-      status: "open"
+      status: "open",
+      $or: [
+        { colony: { $in: colonyIds } },
+        { pincode: { $in: colonyPincodes } }
+      ]
     })
     .populate("user", "fullName mobileNumber registrationID")
     .populate("serviceCategory", "name")
     .populate("colony", "name address city pincode")
-    .sort({ createdAt: -1 })
     .lean();
+
+    // 6️⃣ Calculate distance and sort if lat/lng are provided
+    if (userLat && userLng) {
+      const p1 = { lat: parseFloat(userLat), lng: parseFloat(userLng) };
+      
+      needs = needs.map(need => {
+        if (need.lat && need.lng) {
+          const p2 = { lat: need.lat, lng: need.lng };
+          // Standard Haversine distance in KM
+          const R = 6371;
+          const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+          const dLng = (p2.lng - p1.lng) * Math.PI / 180;
+          const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * 
+            Math.sin(dLng/2) * Math.sin(dLng/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          need.distance = R * c;
+        } else {
+          need.distance = 999999; // Far away or unknown
+        }
+        return need;
+      });
+
+      // Sort: closest first
+      needs.sort((a, b) => (a.distance || 999999) - (b.distance || 999999));
+    } else {
+      // Sort by newest first if no location
+      needs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
 
     return res.json({
       message: `${needs.length} needs milein aapki available colonies mein`,
