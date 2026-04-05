@@ -526,7 +526,8 @@ export const listTatkalUsers = async (req, res) => {
           $geoNear: {
             near: { type: "Point", coordinates: [lngNum, latNum] },
             distanceField: "distance",
-            maxDistance: radiusInMeters,
+            // Only filter by distance if a specific radius was provided
+            ...(req.query.radius ? { maxDistance: radiusInMeters } : {}),
             query: baseFilter,
             spherical: true
           }
