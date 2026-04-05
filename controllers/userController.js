@@ -482,10 +482,12 @@ export const listTatkalUsers = async (req, res) => {
     };
 
     if (serviceCategoryId) baseFilter.serviceCategory = serviceCategoryId;
-    if (pincode) baseFilter.pincode = Number(pincode);
+    if (pincode) {
+      // Handle both string and number pincodes in DB
+      baseFilter.pincode = { $in: [pincode, String(pincode), Number(pincode)] };
+    }
 
-    // ✅ Search Filtering (Name, Address)
-    // Search is handled in aggregation pipeline below to support category name matching.
+    // ✅ Search Filtering (Handled in aggregation pipeline below)
 
     let users;
     const latNum = lat ? parseFloat(lat) : null;
