@@ -485,23 +485,33 @@ export const listTatkalUsers = async (req, res) => {
     if (pincode) baseFilter.pincode = Number(pincode);
 
     // ✅ Search Filtering (Name, Address)
-    if (search) {
-      baseFilter.$or = [
-        { fullName: { $regex: search, $options: "i" } },
-        { address: { $regex: search, $options: "i" } },
-        { fullAddress: { $regex: search, $options: "i" } },
-      ];
-    }
+    // Search is handled in aggregation pipeline below to support category name matching.
 
     let users;
-    // ✅ Nearby range filtering (default 5km)
-    if (lat && lng) {
-      const latNum = parseFloat(lat);
-      const lngNum = parseFloat(lng);
-      const radiusInMeters = parseInt(radius || 5) * 1000;
+    const latNum = lat ? parseFloat(lat) : null;
+    const lngNum = lng ? parseFloat(lng) : null;
+    const radiusInMeters = parseInt(radius || 5) * 1000;
 
-      // Using aggregation for distance calculation
-      users = await User.aggregate([
+    // Build reusable aggregation stages
+    const lookupStage = {
+      $lookup: {
+        from: "servicecategories",
+        localField: "serviceCategory",
+        foreignField: "_id",
+        as: "serviceCategory"
+      }
+    };
+    const unwindStage = {
+      $unwind: {
+        path: "$serviceCategory",
+        preserveNullAndEmptyArrays: true
+      }
+    };
+    const projectStage = { $project: { password: 0 } };
+
+    if (latNum !== null && lngNum !== null && !isNaN(latNum) && !isNaN(lngNum)) {
+      // PROXIMITY SEARCH
+      const pipeline = [
         {
           $geoNear: {
             near: { type: "Point", coordinates: [lngNum, latNum] },
@@ -511,30 +521,49 @@ export const listTatkalUsers = async (req, res) => {
             spherical: true
           }
         },
-        {
-          $lookup: {
-            from: "servicecategories",
-            localField: "serviceCategory",
-            foreignField: "_id",
-            as: "serviceCategory"
+        lookupStage,
+        unwindStage,
+        projectStage
+      ];
+
+      // If search exists, filter after lookup to include category names
+      if (search) {
+        const searchRegex = new RegExp(search, "i");
+        pipeline.push({
+          $match: {
+            $or: [
+              { fullName: searchRegex },
+              { address: searchRegex },
+              { fullAddress: searchRegex },
+              { "serviceCategory.name": searchRegex }
+            ]
           }
-        },
-        {
-          $unwind: {
-            path: "$serviceCategory",
-            preserveNullAndEmptyArrays: true
-          }
-        },
-        {
-          $project: {
-            password: 0
-          }
-        }
-      ]);
+        });
+      }
+      users = await User.aggregate(pipeline);
     } else {
-      users = await User.find(baseFilter, "-password")
-      .populate("serviceCategory", "name description")
-      .lean();
+      // GLOBAL SEARCH (No distance)
+      const pipeline = [
+        { $match: baseFilter },
+        lookupStage,
+        unwindStage,
+        projectStage
+      ];
+
+      if (search) {
+        const searchRegex = new RegExp(search, "i");
+        pipeline.push({
+          $match: {
+            $or: [
+              { fullName: searchRegex },
+              { address: searchRegex },
+              { fullAddress: searchRegex },
+              { "serviceCategory.name": searchRegex }
+            ]
+          }
+        });
+      }
+      users = await User.aggregate(pipeline);
     }
 
     // ✅ Filter by availability if location/date specified (existing logic)
