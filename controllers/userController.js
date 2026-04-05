@@ -469,25 +469,57 @@ export const setMyTatkalStatus = async (req, res) => {
   }
 };
 
-// ✅ PUBLIC: list all tatkal-enabled society service users with availability
+// ✅ PUBLIC: list all tatkal-enabled society service users with nearby range and search
 export const listTatkalUsers = async (req, res) => {
   try {
-    const { serviceCategoryId, pincode, colonyId, date } = req.query;
+    const { serviceCategoryId, pincode, colonyId, date, lat, lng, radius, search } = req.query;
 
-    const filter = {
+    const baseFilter = {
       tatkalEnabled: true,
       isBlocked: false,
       role: "society service",
     };
 
-    if (serviceCategoryId) filter.serviceCategory = serviceCategoryId;
-    if (pincode) filter.pincode = Number(pincode);
+    if (serviceCategoryId) baseFilter.serviceCategory = serviceCategoryId;
+    if (pincode) baseFilter.pincode = Number(pincode);
 
-    let users = await User.find(filter, "-password")
+    // ✅ Search Filtering (Name, Address)
+    if (search) {
+      baseFilter.$or = [
+        { fullName: { $regex: search, $options: "i" } },
+        { address: { $regex: search, $options: "i" } },
+        { fullAddress: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    let users;
+    // ✅ Nearby range filtering (default 5km)
+    if (lat && lng) {
+      const latNum = parseFloat(lat);
+      const lngNum = parseFloat(lng);
+      const radiusInMeters = parseInt(radius || 5) * 1000;
+
+      users = await User.find({
+        ...baseFilter,
+        location: {
+          $near: {
+            $geometry: {
+              type: "Point",
+              coordinates: [lngNum, latNum],
+            },
+            $maxDistance: radiusInMeters,
+          },
+        },
+      }, "-password")
       .populate("serviceCategory", "name description")
       .lean();
+    } else {
+      users = await User.find(baseFilter, "-password")
+      .populate("serviceCategory", "name description")
+      .lean();
+    }
 
-    // ✅ Filter by availability if location/date specified
+    // ✅ Filter by availability if location/date specified (existing logic)
     if (colonyId || date) {
       const { default: Availability } = await import("../models/Availability.js");
       
@@ -510,10 +542,10 @@ export const listTatkalUsers = async (req, res) => {
   }
 };
 
-// ✅ PUBLIC: list tatkal-enabled society service users by pincode with availability
+// ✅ PUBLIC: list tatkal-enabled society service users by pincode with availability and search
 export const listTatkalUsersByPincode = async (req, res) => {
   try {
-    const { pincode, serviceCategoryId, date, colonyId } = req.query;
+    const { pincode, serviceCategoryId, date, colonyId, search } = req.query;
 
     if (!pincode) {
       return res.status(400).json({
@@ -530,6 +562,15 @@ export const listTatkalUsersByPincode = async (req, res) => {
 
     if (serviceCategoryId) {
       filter.serviceCategory = serviceCategoryId;
+    }
+
+    // ✅ Search Filtering (Name, Address)
+    if (search) {
+      filter.$or = [
+        { fullName: { $regex: search, $options: "i" } },
+        { address: { $regex: search, $options: "i" } },
+        { fullAddress: { $regex: search, $options: "i" } },
+      ];
     }
 
     let users = await User.find(filter, "-password")
