@@ -490,9 +490,16 @@ export const listTatkalUsers = async (req, res) => {
     let users;
     const latNum = lat ? parseFloat(lat) : null;
     const lngNum = lng ? parseFloat(lng) : null;
-    const radiusInMeters = radius ? parseFloat(radius) * 1000 : null;
+    const radiusInMeters = radius ? parseFloat(radius) * 1000 : 100000; // Default 100km for better testing visibility
 
-    console.log(`🔍 Tatkal Search: search="${search}", lat=${latNum}, lng=${lngNum}, radius=${radius ? radius : "ALL"}km`);
+    console.log(`🔍 Tatkal Search Request:`, { 
+      search, 
+      lat: latNum, 
+      lng: lngNum, 
+      radius: radiusInMeters / 1000 + "km",
+      colonyId,
+      date 
+    });
 
     // Standard Aggregation Phases
     const lookupStage = {
@@ -510,72 +517,66 @@ export const listTatkalUsers = async (req, res) => {
       }
     };
 
-    if (latNum !== null && lngNum !== null && !isNaN(latNum) && !isNaN(lngNum)) {
-      const geoNearStage = {
-        $geoNear: {
-          near: { type: "Point", coordinates: [lngNum, latNum] },
-          distanceField: "distance",
-          query: baseFilter,
-          spherical: true
+    try {
+      if (latNum !== null && lngNum !== null && !isNaN(latNum) && !isNaN(lngNum)) {
+        // 📍 PROXIMITY SEARCH (Includes Distance)
+        const geoNearStage = {
+          $geoNear: {
+            near: { type: "Point", coordinates: [lngNum, latNum] },
+            distanceField: "distance",
+            maxDistance: radiusInMeters,
+            query: baseFilter,
+            spherical: true
+          }
+        };
+
+        const pipeline = [geoNearStage, lookupStage, unwindStage];
+
+        if (search) {
+          const searchRegex = new RegExp(search.trim(), "i");
+          pipeline.push({
+            $match: {
+              $or: [
+                { fullName: searchRegex },
+                { address: searchRegex },
+                { fullAddress: searchRegex },
+                { "serviceCategory.name": searchRegex }
+              ]
+            }
+          });
         }
-      };
 
-      // Only add maxDistance if radius was explicitly requested
-      if (radiusInMeters) {
-        geoNearStage.$geoNear.maxDistance = radiusInMeters;
+        users = await User.aggregate(pipeline);
+        console.log(`📍 Found ${users.length} workers nearby`);
+      } else {
+        // 🌐 GLOBAL SEARCH (No proximity filtering)
+        const pipeline = [{ $match: baseFilter }, lookupStage, unwindStage];
+
+        if (search) {
+          const searchRegex = new RegExp(search.trim(), "i");
+          pipeline.push({
+            $match: {
+              $or: [
+                { fullName: searchRegex },
+                { address: searchRegex },
+                { fullAddress: searchRegex },
+                { "serviceCategory.name": searchRegex }
+              ]
+            }
+          });
+        }
+
+        users = await User.aggregate(pipeline);
+        console.log(`🌐 Found ${users.length} workers in total`);
       }
-
-      const pipeline = [
-        geoNearStage,
-        lookupStage,
-        unwindStage
-      ];
-
-      if (search) {
-        const searchRegex = new RegExp(search, "i");
-        pipeline.push({
-          $match: {
-            $or: [
-              { fullName: searchRegex },
-              { address: searchRegex },
-              { fullAddress: searchRegex },
-              { "serviceCategory.name": searchRegex }
-            ]
-          }
-        });
-      }
-
-      users = await User.aggregate(pipeline);
-      console.log(`📍 Found ${users.length} workers nearby`);
-    } else {
-      // Use standard find for All Services tab if no location, with distance calculation only if coordinates provided later
-      const pipeline = [
-        { $match: baseFilter },
-        lookupStage,
-        unwindStage
-      ];
-
-      if (search) {
-        const searchRegex = new RegExp(search, "i");
-        pipeline.push({
-          $match: {
-            $or: [
-              { fullName: searchRegex },
-              { address: searchRegex },
-              { fullAddress: searchRegex },
-              { "serviceCategory.name": searchRegex }
-            ]
-          }
-        });
-      }
-
-      users = await User.aggregate(pipeline);
-      console.log(`🌐 Found ${users.length} workers in total`);
+    } catch (aggError) {
+      console.error("❌ Aggregation failed:", aggError);
+      throw aggError; // caught by outer catch
     }
 
-    // Explicitly hide passwords for security
+    // Explicitly hide sensitive data
     users = users.map(u => {
-      const { password, ...rest } = u;
+      const { password, otp, ...rest } = u;
       return rest;
     });
 
@@ -591,14 +592,19 @@ export const listTatkalUsers = async (req, res) => {
         .populate("user", "_id")
         .lean();
       
-      const availableUserIds = availableUsers.map(av => av.user._id.toString());
+      const availableUserIds = availableUsers.map(av => av.user ? av.user._id.toString() : null).filter(id => id);
       users = users.filter(user => availableUserIds.includes(user._id.toString()));
+      console.log(`📅 Availability filtering applied: ${users.length} remain`);
     }
 
     return res.json({ users });
   } catch (err) {
-    console.error("listTatkalUsers error:", err);
-    return res.status(500).json({ message: "Server error" });
+    console.error("❌ listTatkalUsers server error:", err);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Server error in Tatkal discovery",
+      error: err.message 
+    });
   }
 };
 
