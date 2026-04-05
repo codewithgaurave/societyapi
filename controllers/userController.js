@@ -499,20 +499,37 @@ export const listTatkalUsers = async (req, res) => {
       const lngNum = parseFloat(lng);
       const radiusInMeters = parseInt(radius || 5) * 1000;
 
-      users = await User.find({
-        ...baseFilter,
-        location: {
-          $near: {
-            $geometry: {
-              type: "Point",
-              coordinates: [lngNum, latNum],
-            },
-            $maxDistance: radiusInMeters,
-          },
+      // Using aggregation for distance calculation
+      users = await User.aggregate([
+        {
+          $geoNear: {
+            near: { type: "Point", coordinates: [lngNum, latNum] },
+            distanceField: "distance",
+            maxDistance: radiusInMeters,
+            query: baseFilter,
+            spherical: true
+          }
         },
-      }, "-password")
-      .populate("serviceCategory", "name description")
-      .lean();
+        {
+          $lookup: {
+            from: "servicecategories",
+            localField: "serviceCategory",
+            foreignField: "_id",
+            as: "serviceCategory"
+          }
+        },
+        {
+          $unwind: {
+            path: "$serviceCategory",
+            preserveNullAndEmptyArrays: true
+          }
+        },
+        {
+          $project: {
+            password: 0
+          }
+        }
+      ]);
     } else {
       users = await User.find(baseFilter, "-password")
       .populate("serviceCategory", "name description")
@@ -763,17 +780,47 @@ export const deleteUser = async (req, res) => {
 export const getUserDetailsById = async (req, res) => {
   try {
     const { id } = req.params;
+    const { lat, lng } = req.query; // ✅ For distance calculation
 
     const user = await User.findById(id).lean();
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const [availability, holidays, templates] = await Promise.all([
-      Availability.find({ user: id })
+    let availabilityList = await Availability.find({ user: id })
         .populate("colonies", "name address city pincode")
         .sort({ date: 1, startTime: 1 })
-        .lean(),
+        .lean();
+
+    // ✅ Calculate distance for each availability if lat/lng is provided
+    if (lat && lng) {
+      const lat1 = parseFloat(lat);
+      const lng1 = parseFloat(lng);
+
+      availabilityList = availabilityList.map(av => {
+        if (av.location && av.location.coordinates && 
+            av.location.coordinates[0] !== 0 && av.location.coordinates[1] !== 0) {
+          
+          const lng2 = av.location.coordinates[0];
+          const lat2 = av.location.coordinates[1];
+          
+          // Haversine formula for distance in KM
+          const R = 6371; // Earth's radius in km
+          const dLat = (lat2 - lat1) * Math.PI / 180;
+          const dLng = (lng2 - lng1) * Math.PI / 180;
+          const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const distance = R * c * 1000; // Distance in meters
+          
+          return { ...av, distance: distance };
+        }
+        return av;
+      });
+    }
+
+    const [holidays, templates] = await Promise.all([
       Holiday.find({ user: id })
         .sort({ startDate: -1 })
         .lean(),
@@ -795,7 +842,7 @@ export const getUserDetailsById = async (req, res) => {
 
     return res.json({
       user,
-      availability,
+      availability: availabilityList,
       holidays,
       templates,
       hasActiveHoliday,
