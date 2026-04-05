@@ -473,6 +473,7 @@ export const setMyTatkalStatus = async (req, res) => {
 export const listTatkalUsers = async (req, res) => {
   try {
     const { serviceCategoryId, pincode, colonyId, date, lat, lng, radius, search } = req.query;
+    console.log(`🔍 listTatkalUsers called with search="${search}", pincode="${pincode}", lat=${lat}, lng=${lng}`);
 
     const baseFilter = {
       tatkalEnabled: true,
@@ -782,7 +783,7 @@ export const getUserDetailsById = async (req, res) => {
     const { id } = req.params;
     const { lat, lng } = req.query; // ✅ For distance calculation
 
-    const user = await User.findById(id).lean();
+    const user = await User.findById(id).populate("serviceCategory", "name").lean();
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
