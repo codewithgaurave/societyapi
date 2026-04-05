@@ -381,14 +381,18 @@ export const getMyAvailableNeeds = async (req, res) => {
       }
     });
 
-    // 4️⃣ Extract colony pincodes too for PIN-based needs
+    // 4️⃣ Extract colony pincodes and ensure ObjectId conversion
     const colonies = await Colony.find({ _id: { $in: colonyIds } }).select("pincode").lean();
     const colonyPincodes = colonies.map(c => Number(c.pincode)).filter(p => !isNaN(p));
+    
+    // Add user's own profile pincode as fallback
+    if (user.pincode) {
+      colonyPincodes.push(Number(user.pincode));
+    }
+
     const { lat: userLat, lng: userLng } = req.query;
 
-    if (colonyIds.length === 0) {
-      return res.json({ message: "Pehle availability set karein", needs: [] });
-    }
+    console.log(`🔍 Finding needs for: CID=${user.serviceCategory}, Colonies=[${colonyIds}], PINs=[${colonyPincodes}]`);
 
     // 5️⃣ Find needs matching category and (colony OR pincode)
     let needs = await Need.find({
@@ -403,6 +407,8 @@ export const getMyAvailableNeeds = async (req, res) => {
     .populate("serviceCategory", "name")
     .populate("colony", "name address city pincode")
     .lean();
+
+    console.log(`✅ Found ${needs.length} potential needs before sorting`);
 
     // 6️⃣ Calculate distance and sort if lat/lng are provided
     if (userLat && userLng) {
@@ -435,7 +441,7 @@ export const getMyAvailableNeeds = async (req, res) => {
     }
 
     return res.json({
-      message: `${needs.length} needs milein aapki available colonies mein`,
+      message: `${needs.length} needs milein aapke working area mein`,
       count: needs.length,
       needs
     });
