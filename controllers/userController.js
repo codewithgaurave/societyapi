@@ -490,9 +490,11 @@ export const listTatkalUsers = async (req, res) => {
     let users;
     const latNum = lat ? parseFloat(lat) : null;
     const lngNum = lng ? parseFloat(lng) : null;
-    const radiusInMeters = parseInt(radius || 5) * 1000;
+    const radiusInMeters = radius ? parseFloat(radius) * 1000 : null;
 
-    // Build reusable aggregation stages
+    console.log(`🔍 Tatkal Search: search="${search}", lat=${latNum}, lng=${lngNum}, radius=${radius ? radius : "ALL"}km`);
+
+    // Standard Aggregation Phases
     const lookupStage = {
       $lookup: {
         from: "servicecategories",
@@ -507,26 +509,28 @@ export const listTatkalUsers = async (req, res) => {
         preserveNullAndEmptyArrays: true
       }
     };
-    const projectStage = { $project: { password: 0 } };
 
     if (latNum !== null && lngNum !== null && !isNaN(latNum) && !isNaN(lngNum)) {
-      // PROXIMITY SEARCH
+      const geoNearStage = {
+        $geoNear: {
+          near: { type: "Point", coordinates: [lngNum, latNum] },
+          distanceField: "distance",
+          query: baseFilter,
+          spherical: true
+        }
+      };
+
+      // Only add maxDistance if radius was explicitly requested
+      if (radiusInMeters) {
+        geoNearStage.$geoNear.maxDistance = radiusInMeters;
+      }
+
       const pipeline = [
-        {
-          $geoNear: {
-            near: { type: "Point", coordinates: [lngNum, latNum] },
-            distanceField: "distance",
-            maxDistance: radiusInMeters,
-            query: baseFilter,
-            spherical: true
-          }
-        },
+        geoNearStage,
         lookupStage,
-        unwindStage,
-        projectStage
+        unwindStage
       ];
 
-      // If search exists, filter after lookup to include category names
       if (search) {
         const searchRegex = new RegExp(search, "i");
         pipeline.push({
@@ -540,14 +544,15 @@ export const listTatkalUsers = async (req, res) => {
           }
         });
       }
+
       users = await User.aggregate(pipeline);
+      console.log(`📍 Found ${users.length} workers nearby`);
     } else {
-      // GLOBAL SEARCH (No distance)
+      // Use standard find for All Services tab if no location, with distance calculation only if coordinates provided later
       const pipeline = [
         { $match: baseFilter },
         lookupStage,
-        unwindStage,
-        projectStage
+        unwindStage
       ];
 
       if (search) {
@@ -563,8 +568,16 @@ export const listTatkalUsers = async (req, res) => {
           }
         });
       }
+
       users = await User.aggregate(pipeline);
+      console.log(`🌐 Found ${users.length} workers in total`);
     }
+
+    // Explicitly hide passwords for security
+    users = users.map(u => {
+      const { password, ...rest } = u;
+      return rest;
+    });
 
     // ✅ Filter by availability if location/date specified (existing logic)
     if (colonyId || date) {
