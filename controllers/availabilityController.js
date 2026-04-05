@@ -201,7 +201,7 @@ export const updateAvailability = async (req, res) => {
   try {
     const auth = req.user || {};
     const { id } = req.params;
-    const { date, startTime, endTime, isAvailable, notes, colonyIds, lat, lng, address } = req.body;
+    const { availabilityType, date, startDate, endDate, startTime, endTime, isAvailable, notes, colonyIds, lat, lng, address } = req.body;
 
     const availability = await Availability.findById(id);
     if (!availability) {
@@ -218,12 +218,35 @@ export const updateAvailability = async (req, res) => {
 
     const updates = {};
 
+    if (availabilityType !== undefined) {
+      if (!["single", "range", "always"].includes(availabilityType)) {
+        return res.status(400).json({ message: "Invalid availabilityType" });
+      }
+      updates.availabilityType = availabilityType;
+    }
+
     if (date !== undefined) {
       const d = new Date(date);
       if (Number.isNaN(d.getTime())) {
         return res.status(400).json({ message: "Invalid date format" });
       }
       updates.date = d;
+    }
+
+    if (startDate !== undefined) {
+      const s = new Date(startDate);
+      if (Number.isNaN(s.getTime())) {
+        return res.status(400).json({ message: "Invalid startDate format" });
+      }
+      updates.startDate = s;
+    }
+
+    if (endDate !== undefined) {
+      const e = new Date(endDate);
+      if (Number.isNaN(e.getTime())) {
+        return res.status(400).json({ message: "Invalid endDate format" });
+      }
+      updates.endDate = e;
     }
 
     if (startTime !== undefined) {
