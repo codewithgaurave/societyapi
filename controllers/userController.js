@@ -630,18 +630,47 @@ export const listTatkalUsersByPincode = async (req, res) => {
       filter.serviceCategory = serviceCategoryId;
     }
 
-    // ✅ Search Filtering (Name, Address)
+    const pipeline = [
+      { $match: filter },
+      {
+        $lookup: {
+          from: "servicecategories",
+          localField: "serviceCategory",
+          foreignField: "_id",
+          as: "serviceCategory"
+        }
+      },
+      {
+        $unwind: {
+          path: "$serviceCategory",
+          preserveNullAndEmptyArrays: true
+        }
+      }
+    ];
+
+    // ✅ Search Filtering (Name, Address, Service Category)
     if (search) {
-      filter.$or = [
-        { fullName: { $regex: search, $options: "i" } },
-        { address: { $regex: search, $options: "i" } },
-        { fullAddress: { $regex: search, $options: "i" } },
-      ];
+      const searchRegex = new RegExp(search.trim(), "i");
+      pipeline.push({
+        $match: {
+          $or: [
+            { fullName: searchRegex },
+            { address: searchRegex },
+            { fullAddress: searchRegex },
+            { "serviceCategory.name": searchRegex }
+          ]
+        }
+      });
     }
 
-    let users = await User.find(filter, "-password")
-      .populate("serviceCategory", "name description")
-      .lean();
+    let users = await User.aggregate(pipeline);
+    console.log(`📍 Pincode Search: Found ${users.length} workers in pincode ${pincode}`);
+
+    // Hide sensitive data
+    users = users.map(u => {
+      const { password, otp, ...rest } = u;
+      return rest;
+    });
 
     // ✅ Filter by availability and location
     const { default: Availability } = await import("../models/Availability.js");
