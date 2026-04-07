@@ -17,6 +17,7 @@ import {
   getSocietyServiceUsersByLocation,
   getAllSocietyServiceUsers,
   listTatkalUsersByPincode,
+  getUsersForMap,
 } from "../controllers/userController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { uploadUserFields } from "../config/cloudinary.js";
@@ -25,6 +26,9 @@ const router = express.Router();
 
 // 🔹 PUBLIC: get all users (safe)
 router.get("/public/all", getAllUsersPublic);
+
+// 🔹 PUBLIC: get all users for map display
+router.get("/public/map", getUsersForMap);
 
 // 🔹 PUBLIC: get all tatkal-enabled service providers
 router.get("/tatkal", listTatkalUsers);

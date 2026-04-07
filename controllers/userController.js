@@ -1085,3 +1085,20 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+// ✅ PUBLIC: get all users for map display
+export const getUsersForMap = async (req, res) => {
+  try {
+    const users = await User.find(
+      { isBlocked: false },
+      "fullName mobileNumber registrationID profileImage role location serviceCategory"
+    )
+      .populate("serviceCategory", "name")
+      .lean();
+
+    return res.json({ users });
+  } catch (err) {
+    console.error("getUsersForMap error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
