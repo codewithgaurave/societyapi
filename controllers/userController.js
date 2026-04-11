@@ -583,13 +583,28 @@ export const listTatkalUsers = async (req, res) => {
       return rest;
     });
 
-    // ✅ Filter by availability if location/date specified (existing logic)
+    // ✅ Filter by availability if location/date specified (improved logic)
     if (colonyId || date) {
       const { default: Availability } = await import("../models/Availability.js");
       
       const availabilityFilter = { isAvailable: true };
+      
       if (colonyId) availabilityFilter.colonies = colonyId;
-      if (date) availabilityFilter.date = new Date(date);
+      
+      if (date) {
+        const queryDate = new Date(date);
+        availabilityFilter.$or = [
+          { date: queryDate },
+          { availabilityType: "always" },
+          { 
+            $and: [
+              { availabilityType: "range" },
+              { startDate: { $lte: queryDate } },
+              { endDate: { $gte: queryDate } }
+            ]
+          }
+        ];
+      }
 
       const availableUsers = await Availability.find(availabilityFilter)
         .populate("user", "_id")
@@ -693,13 +708,26 @@ export const listTatkalUsersByPincode = async (req, res) => {
       }
     }
     
-    if (date) availabilityFilter.date = new Date(date);
+    if (date) {
+      const queryDate = new Date(date);
+      availabilityFilter.$or = [
+        { date: queryDate },
+        { availabilityType: "always" },
+        { 
+          $and: [
+            { availabilityType: "range" },
+            { startDate: { $lte: queryDate } },
+            { endDate: { $gte: queryDate } }
+          ]
+        }
+      ];
+    }
 
     const availableUsers = await Availability.find(availabilityFilter)
       .populate("user", "_id")
       .lean();
     
-    const availableUserIds = availableUsers.map(av => av.user._id.toString());
+    const availableUserIds = availableUsers.map(av => av.user ? av.user._id.toString() : null).filter(id => id);
     users = users.filter(user => availableUserIds.includes(user._id.toString()));
 
     return res.json({ users });
