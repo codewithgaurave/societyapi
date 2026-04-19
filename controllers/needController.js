@@ -363,14 +363,15 @@ export const getMyAvailableNeeds = async (req, res) => {
         { availabilityType: "always" },
         { availabilityType: "single", date: { $gte: today } },
         { availabilityType: "range", startDate: { $lte: today }, endDate: { $gte: today } },
-        // range jo aage bhi chalegi
         { availabilityType: "range", startDate: { $gte: today } },
       ]
     })
-    .select("colonies")
+    .select("colonies address location")
     .lean();
 
     const colonyIds = [];
+    const availabilityPincodes = [];
+
     availabilityRecords.forEach(record => {
       if (record.colonies && Array.isArray(record.colonies)) {
         record.colonies.forEach(colonyId => {
@@ -381,10 +382,26 @@ export const getMyAvailableNeeds = async (req, res) => {
       }
     });
 
+    // Extract pincodes from availability address strings (6-digit pincode regex)
+    availabilityRecords.forEach(record => {
+      if (record.address) {
+        const pincodeMatch = record.address.match(/\b(\d{6})\b/);
+        if (pincodeMatch) {
+          const pin = Number(pincodeMatch[1]);
+          if (!availabilityPincodes.includes(pin)) availabilityPincodes.push(pin);
+        }
+      }
+    });
+
     // 4️⃣ Extract colony pincodes and ensure ObjectId conversion
     const colonies = await Colony.find({ _id: { $in: colonyIds } }).select("pincode").lean();
     const colonyPincodes = colonies.map(c => Number(c.pincode)).filter(p => !isNaN(p));
     
+    // Merge availability-based pincodes
+    availabilityPincodes.forEach(p => {
+      if (!colonyPincodes.includes(p)) colonyPincodes.push(p);
+    });
+
     // Add user's own profile pincode as fallback
     if (user.pincode) {
       colonyPincodes.push(Number(user.pincode));
