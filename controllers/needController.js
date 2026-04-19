@@ -366,7 +366,7 @@ export const getMyAvailableNeeds = async (req, res) => {
         { availabilityType: "range", startDate: { $gte: today } },
       ]
     })
-    .select("colonies address location")
+    .select("colonies address location pincode")
     .lean();
 
     const colonyIds = [];
@@ -380,9 +380,13 @@ export const getMyAvailableNeeds = async (req, res) => {
           }
         });
       }
+      // Use pincode saved from geocoding
+      if (record.pincode && !availabilityPincodes.includes(record.pincode)) {
+        availabilityPincodes.push(record.pincode);
+      }
     });
 
-    // Extract pincodes from availability address strings (6-digit pincode regex)
+    // Fallback: extract pincode from address string
     availabilityRecords.forEach(record => {
       if (record.address) {
         const pincodeMatch = record.address.match(/\b(\d{6})\b/);

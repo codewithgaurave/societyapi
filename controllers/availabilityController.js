@@ -71,6 +71,7 @@ export const addMyAvailability = async (req, res) => {
     let locationData = { type: "Point", coordinates: [0, 0] };
     let cityData = null;
     let stateData = null;
+    let pincodeData = null;
     let finalAddress = address;
 
     if (lat && lng) {
@@ -98,7 +99,6 @@ export const addMyAvailability = async (req, res) => {
             };
           }
 
-          // Exhaustive SEARCH through ALL results until we find city and state
           for (const res of geoResponse.data.results) {
             const components = res.address_components;
             
@@ -113,34 +113,36 @@ export const addMyAvailability = async (req, res) => {
                   cityData = comp.long_name;
                 }
               }
-
-              if (!stateData) {
-                if (types.includes("administrative_area_level_1")) {
-                  stateData = comp.long_name;
-                }
+              if (!stateData && types.includes("administrative_area_level_1")) {
+                stateData = comp.long_name;
+              }
+              if (!pincodeData && types.includes("postal_code")) {
+                pincodeData = comp.long_name;
               }
             });
 
-            if (cityData && stateData) break; 
+            if (cityData && stateData && pincodeData) break; 
           }
 
-          // Force Final fallbacks
           if (!cityData) {
-            cityData = geoResponse.data.results[0]?.address_components?.find(c => 
-              c.types.includes("locality") || 
-              c.types.includes("administrative_area_level_2") ||
-              c.types.includes("sublocality_level_1")
-            )?.long_name || "Unknown City";
+            cityData = result.address_components?.find(c => 
+              c.types.includes("locality") || c.types.includes("administrative_area_level_2")
+            )?.long_name || null;
           }
           if (!stateData) {
-            stateData = geoResponse.data.results[0]?.address_components?.find(c => 
+            stateData = result.address_components?.find(c => 
               c.types.includes("administrative_area_level_1")
-            )?.long_name || "Unknown State";
+            )?.long_name || null;
+          }
+          if (!pincodeData) {
+            pincodeData = result.address_components?.find(c => 
+              c.types.includes("postal_code")
+            )?.long_name || null;
           }
           
-          if (!finalAddress) finalAddress = geoResponse.data.results[0]?.formatted_address;
+          if (!finalAddress) finalAddress = result.formatted_address;
 
-          console.log(`📍 Availability Geocoding: City=${cityData}, State=${stateData}`);
+          console.log(`📍 Availability Geocoding: City=${cityData}, State=${stateData}, Pincode=${pincodeData}`);
         }
       } catch (geoErr) {
         console.error("Availability geocoding error:", geoErr.message);
@@ -158,7 +160,8 @@ export const addMyAvailability = async (req, res) => {
       location: locationData,
       address: finalAddress,
       city: cityData,
-      state: stateData
+      state: stateData,
+      ...(pincodeData && { pincode: Number(pincodeData) })
     };
 
     if (availabilityType === "single") {

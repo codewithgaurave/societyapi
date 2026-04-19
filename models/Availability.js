@@ -71,13 +71,16 @@ const availabilitySchema = new mongoose.Schema(
       }
     },
     address: {
-      type: String, // Manual or Google's full address
+      type: String,
     },
     city: {
       type: String,
     },
     state: {
       type: String,
+    },
+    pincode: {
+      type: Number,
     },
 
     // IST timestamps
