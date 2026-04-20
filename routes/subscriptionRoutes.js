@@ -6,6 +6,8 @@ import {
   upgradeSubscription,
   checkNeedLimit,
   getAllSubscriptions,
+  createOrder,
+  verifyPayment,
 } from "../controllers/subscriptionController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { authenticateAdmin } from "../middleware/adminAuth.js";
@@ -19,6 +21,8 @@ router.get("/plans", getPlans);
 router.get("/my", requireAuth, getMySubscription);
 router.post("/upgrade", requireAuth, upgradeSubscription);
 router.get("/check-need-limit", requireAuth, checkNeedLimit);
+router.post("/create-order", requireAuth, createOrder);
+router.post("/verify-payment", requireAuth, verifyPayment);
 
 // Admin only
 router.get("/all", authenticateAdmin, getAllSubscriptions);

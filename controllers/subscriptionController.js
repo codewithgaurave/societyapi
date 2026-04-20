@@ -1,6 +1,13 @@
 // controllers/subscriptionController.js
 import Subscription from "../models/Subscription.js";
 import User from "../models/User.js";
+import Razorpay from "razorpay";
+import crypto from "crypto";
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
 
 // ✅ Plan definitions
 const PLANS = {
@@ -205,6 +212,101 @@ export const getAllSubscriptions = async (req, res) => {
     const subs = await Subscription.find({}).populate("user", "fullName mobileNumber role").lean();
     return res.json({ subscriptions: subs });
   } catch (err) {
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ Create Razorpay order
+export const createOrder = async (req, res) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { plan } = req.body;
+    if (!plan) return res.status(400).json({ message: "plan is required" });
+
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const planKey = plan === "free"
+      ? (user.role === "society service" ? "free_service" : "free_member")
+      : plan;
+    const planDetails = PLANS[planKey];
+    if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
+    if (planDetails.userType !== user.role) return res.status(400).json({ message: "Plan not available for your role" });
+    if (planDetails.price === 0) return res.status(400).json({ message: "Free plan does not require payment" });
+
+    const order = await razorpay.orders.create({
+      amount: planDetails.price * 100, // paise
+      currency: "INR",
+      receipt: `sub_${userId}_${plan}_${Date.now()}`,
+      notes: { userId, plan, userType: user.role },
+    });
+
+    return res.json({
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      keyId: process.env.RAZORPAY_KEY_ID,
+      planDetails,
+    });
+  } catch (err) {
+    console.error("createOrder error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ Verify Razorpay payment & activate subscription
+export const verifyPayment = async (req, res) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan } = req.body;
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !plan) {
+      return res.status(400).json({ message: "Missing payment details" });
+    }
+
+    // Verify signature
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest("hex");
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({ message: "Payment verification failed" });
+    }
+
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const planDetails = PLANS[plan];
+    if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
+
+    // Cancel existing active subscriptions
+    await Subscription.updateMany({ user: userId, status: "active" }, { status: "cancelled" });
+
+    const endDate = new Date(Date.now() + planDetails.durationDays * 24 * 60 * 60 * 1000);
+
+    const subscription = await Subscription.create({
+      user: userId,
+      plan,
+      userType: user.role,
+      status: "active",
+      startDate: new Date(),
+      endDate,
+      price: planDetails.price,
+      paymentId: razorpay_payment_id,
+      orderId: razorpay_order_id,
+    });
+
+    return res.status(201).json({
+      message: `Subscription activated: ${planDetails.displayName}`,
+      subscription,
+      planDetails,
+    });
+  } catch (err) {
+    console.error("verifyPayment error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
