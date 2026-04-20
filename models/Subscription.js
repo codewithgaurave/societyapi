@@ -49,7 +49,7 @@ subscriptionSchema.pre("save", function (next) {
 
 // Check if subscription is currently active
 subscriptionSchema.methods.isActive = function () {
-  if (this.plan === "free") return true;
+  if (this.plan === "free" || this.plan === "basic") return true; // no expiry
   if (this.status !== "active") return false;
   if (this.endDate && new Date() > this.endDate) return false;
   return true;

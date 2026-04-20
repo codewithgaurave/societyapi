@@ -6,17 +6,18 @@ import {
   deleteServiceTemplate,
 } from "../controllers/serviceTemplateController.js";
 import { uploadTemplateImage } from "../config/cloudinary.js";
+import { requireAuth } from "../middleware/auth.js";
+import { requireServicePlan } from "../middleware/requireSubscription.js";
 
 const router = express.Router();
 
-// Add template (society service user)
-// Body: form-data (userId, title, description, templateImage)
-router.post("/", uploadTemplateImage, createServiceTemplate);
+// Add template — requires basic+ plan
+router.post("/", requireAuth, requireServicePlan, uploadTemplateImage, createServiceTemplate);
 
-// Get templates (all or by userId)
+// Get templates (public)
 router.get("/", getServiceTemplates);
 
-// Delete template by id
-router.delete("/:id", deleteServiceTemplate);
+// Delete template — requires basic+ plan
+router.delete("/:id", requireAuth, requireServicePlan, deleteServiceTemplate);
 
 export default router;

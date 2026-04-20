@@ -21,6 +21,7 @@ import {
 } from "../controllers/userController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { uploadUserFields } from "../config/cloudinary.js";
+import { requireServicePlan } from "../middleware/requireSubscription.js";
 
 const router = express.Router();
 
@@ -59,8 +60,8 @@ router.get("/me", requireAuth, getMyProfile);
 // 🔹 User: update own profile
 router.put("/me", requireAuth, uploadUserFields, updateMyProfile);
 
-// 🔹 User: toggle tatkal seva
-router.patch("/me/tatkal", requireAuth, setMyTatkalStatus);
+// 🔹 User: toggle tatkal seva — requires basic+ plan
+router.patch("/me/tatkal", requireAuth, requireServicePlan, setMyTatkalStatus);
 
 // 🔹 Admin: list all users
 router.get("/", requireAuth, listUsers);

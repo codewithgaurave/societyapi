@@ -19,7 +19,7 @@ const PLANS = {
     limits: { needsPerMonth: 5, templatesAllowed: 0, tatkalEnabled: false, priorityListing: false, verifiedBadge: false, featuredInTatkal: false, analyticsEnabled: false, whatsappLeads: false }
   },
   basic: {
-    name: "basic", displayName: "Basic", price: 99, durationDays: 30,
+    name: "basic", displayName: "Basic", price: 0, durationDays: 0,
     userType: "society service",
     features: ["Unlimited needs view", "Tatkal toggle ON/OFF", "3 service templates", "Standard listing"],
     limits: { needsPerMonth: -1, templatesAllowed: 3, tatkalEnabled: true, priorityListing: false, verifiedBadge: false, featuredInTatkal: false, analyticsEnabled: false, whatsappLeads: false }
@@ -72,27 +72,29 @@ export const getMySubscription = async (req, res) => {
 
     let subscription = await Subscription.findOne({ user: userId, status: "active" }).lean();
 
-    // If no subscription, create free plan
+    // If no subscription, auto-assign basic (free) for society service, free for member
     if (!subscription) {
       const user = await User.findById(userId).lean();
       if (!user) return res.status(404).json({ message: "User not found" });
 
+      const defaultPlan = user.role === "society service" ? "basic" : "free";
       subscription = await Subscription.create({
         user: userId,
-        plan: "free",
+        plan: defaultPlan,
         userType: user.role,
         status: "active",
         price: 0,
       });
     }
 
-    // Check if expired
-    if (subscription.plan !== "free" && subscription.endDate && new Date() > new Date(subscription.endDate)) {
+    // Check if expired (basic is free/no-expiry, skip it)
+    if (!['free','basic'].includes(subscription.plan) && subscription.endDate && new Date() > new Date(subscription.endDate)) {
       await Subscription.findByIdAndUpdate(subscription._id, { status: "expired" });
-      // Create new free subscription
+      // Downgrade to basic for service, free for member
+      const fallbackPlan = subscription.userType === "society service" ? "basic" : "free";
       subscription = await Subscription.create({
         user: userId,
-        plan: "free",
+        plan: fallbackPlan,
         userType: subscription.userType,
         status: "active",
         price: 0,
@@ -100,10 +102,10 @@ export const getMySubscription = async (req, res) => {
     }
 
     // Get plan details
-    const planKey = subscription.plan === "free"
-      ? (subscription.userType === "society service" ? "free_service" : "free_member")
+    const planKey = (subscription.plan === "free" || subscription.plan === "basic")
+      ? (subscription.userType === "society service" ? (subscription.plan === "basic" ? "basic" : "free_service") : "free_member")
       : subscription.plan;
-    const planDetails = PLANS[planKey] || PLANS["free_service"];
+    const planDetails = PLANS[planKey] || PLANS["basic"];
 
     return res.json({ subscription, planDetails });
   } catch (err) {
@@ -125,8 +127,8 @@ export const upgradeSubscription = async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     // Validate plan for user type
-    const planKey = plan === "free"
-      ? (user.role === "society service" ? "free_service" : "free_member")
+    const planKey = (plan === "free" || plan === "basic")
+      ? (user.role === "society service" ? (plan === "basic" ? "basic" : "free_service") : "free_member")
       : plan;
     const planDetails = PLANS[planKey];
     if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
@@ -135,8 +137,8 @@ export const upgradeSubscription = async (req, res) => {
     // Cancel existing active subscription
     await Subscription.updateMany({ user: userId, status: "active" }, { status: "cancelled" });
 
-    // Create new subscription
-    const endDate = plan === "free" ? null : new Date(Date.now() + planDetails.durationDays * 24 * 60 * 60 * 1000);
+    // basic and free have no expiry
+    const endDate = (plan === "free" || plan === "basic") ? null : new Date(Date.now() + planDetails.durationDays * 24 * 60 * 60 * 1000);
 
     const subscription = await Subscription.create({
       user: userId,
@@ -234,7 +236,7 @@ export const createOrder = async (req, res) => {
     const planDetails = PLANS[planKey];
     if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
     if (planDetails.userType !== user.role) return res.status(400).json({ message: "Plan not available for your role" });
-    if (planDetails.price === 0) return res.status(400).json({ message: "Free plan does not require payment" });
+    if (planDetails.price === 0) return res.status(400).json({ message: "This plan is free, no payment required" });
 
     const order = await getRazorpay().orders.create({
       amount: planDetails.price * 100, // paise

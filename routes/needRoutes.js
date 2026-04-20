@@ -10,18 +10,18 @@ import {
   getNeedsByServiceCategoryAndPincode,
   getMyAvailableNeeds,
 } from "../controllers/needController.js";
-// import { requireAuth } from "../middleware/auth.js"; // agar auth se karna ho
+import { requireAuth } from "../middleware/auth.js";
+import { requireMemberPlan } from "../middleware/requireSubscription.js";
 
 const router = express.Router();
 
-// 🔹 Create need (society member)
-// Abhi body se userId aa raha hai. Agar token se karna ho to controller thoda change hoga.
-router.post("/", createNeed);
+// 🔹 Create need — requires auth + any member plan (free allows 3/month, plus unlimited)
+router.post("/", requireAuth, requireMemberPlan, createNeed);
 
-// 🔹 Get all needs (public, with filters)
+// 🔹 Get all needs (public)
 router.get("/", getAllNeeds);
 
-// 🔹 NEW: Get needs by service category and pincode
+// 🔹 Get needs by service category and pincode
 router.get("/by-location", getNeedsByServiceCategoryAndPincode);
 
 // 🔹 Get needs based on user's availability colonies
@@ -32,9 +32,8 @@ router.get("/user/:userId", getNeedsByUser);
 
 router.get("/:id/details", getNeedWithUserDetails);
 
-
-// 🔹 Delete need by id (abhi public, chahe to auth laga sakte ho)
-router.delete("/:id", deleteNeed);
+// 🔹 Delete need
+router.delete("/:id", requireAuth, deleteNeed);
 
 router.get("/provider/:userId/by-colony", getColonySpecificNeeds);
 

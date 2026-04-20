@@ -10,11 +10,12 @@ import {
   getAvailabilityById,
 } from "../controllers/availabilityController.js";
 import { requireAuth } from "../middleware/auth.js";
+import { requireServicePlan } from "../middleware/requireSubscription.js";
 
 const router = express.Router();
 
-// 🔹 Add availability (logged in user)
-router.post("/me", requireAuth, addMyAvailability);
+// 🔹 Add availability — requires basic+ plan (society service)
+router.post("/me", requireAuth, requireServicePlan, addMyAvailability);
 
 // 🔹 Get my availability (by token)
 router.get("/me", requireAuth, getMyAvailability);
@@ -28,10 +29,10 @@ router.get("/", getAllAvailability);
 // 🔹 Get single availability by id (public)
 router.get("/:id", getAvailabilityById);
 
-// 🔹 Update availability (owner or admin)
-router.put("/:id", requireAuth, updateAvailability);
+// 🔹 Update availability — requires basic+ plan
+router.put("/:id", requireAuth, requireServicePlan, updateAvailability);
 
-// 🔹 Delete availability (owner or admin)
-router.delete("/:id", requireAuth, deleteAvailability);
+// 🔹 Delete availability — requires basic+ plan
+router.delete("/:id", requireAuth, requireServicePlan, deleteAvailability);
 
 export default router;
