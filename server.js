@@ -18,6 +18,7 @@ import colonyRoutes from "./routes/colonyRoutes.js";
 import availabilityRoutes from "./routes/availabilityRoutes.js";
 import needRoutes from "./routes/needRoutes.js";
 import basicUserRoutes from "./routes/basicUserRoutes.js";
+import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import mainCategoryRoutes from "./routes/mainCategoryRoutes.js";
 
 
@@ -61,6 +62,7 @@ app.use("/api/availability", availabilityRoutes);
 app.use("/api/needs", needRoutes);
 app.use("/api/basic-users", basicUserRoutes);
 app.use("/api/main-categories", mainCategoryRoutes);
+app.use("/api/subscriptions", subscriptionRoutes);
 
 // Health / root
 app.get("/", (_req, res) => res.send("✅ API is running..."));
