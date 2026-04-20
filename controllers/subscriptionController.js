@@ -4,7 +4,7 @@ import User from "../models/User.js";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 
-const razorpay = new Razorpay({
+const getRazorpay = () => new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
@@ -236,7 +236,7 @@ export const createOrder = async (req, res) => {
     if (planDetails.userType !== user.role) return res.status(400).json({ message: "Plan not available for your role" });
     if (planDetails.price === 0) return res.status(400).json({ message: "Free plan does not require payment" });
 
-    const order = await razorpay.orders.create({
+    const order = await getRazorpay().orders.create({
       amount: planDetails.price * 100, // paise
       currency: "INR",
       receipt: `sub_${userId}_${plan}_${Date.now()}`,
