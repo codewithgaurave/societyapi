@@ -253,8 +253,11 @@ export const createOrder = async (req, res) => {
       planDetails,
     });
   } catch (err) {
-    console.error("createOrder error:", err);
-    return res.status(500).json({ message: "Server error" });
+    console.error("createOrder error:", JSON.stringify(err?.error || err));
+    return res.status(500).json({
+      message: "Server error",
+      detail: err?.error?.description || err?.message || String(err),
+    });
   }
 };
 
