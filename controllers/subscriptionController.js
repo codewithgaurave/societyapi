@@ -241,7 +241,7 @@ export const createOrder = async (req, res) => {
     const order = await getRazorpay().orders.create({
       amount: planDetails.price * 100, // paise
       currency: "INR",
-      receipt: `sub_${userId}_${plan}_${Date.now()}`,
+      receipt: `sub_${Date.now()}`,
       notes: { userId, plan, userType: user.role },
     });
 
