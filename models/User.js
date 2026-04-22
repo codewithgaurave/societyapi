@@ -69,6 +69,12 @@ const userSchema = new mongoose.Schema(
       type: String,
     },
 
+    // FCM Token for push notifications
+    fcmToken: {
+      type: String,
+      default: null,
+    },
+
     // 🔹 Tatkal Seva toggle
     tatkalEnabled: {
       type: Boolean,

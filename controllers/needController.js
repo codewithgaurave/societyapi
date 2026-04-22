@@ -6,6 +6,7 @@ import ServiceCategory from "../models/ServiceCategory.js";
 import Availability from "../models/Availability.js";
 import Holiday from "../models/Holiday.js";
 import ServiceTemplate from "../models/ServiceTemplate.js";
+import { sendMulticastNotification } from "../services/notificationService.js";
 
 
 // ✅ Create need (society member need post karega)
@@ -70,6 +71,58 @@ export const createNeed = async (req, res) => {
       .populate("serviceCategory", "name")
       .populate("colony", "name address city pincode")
       .lean();
+
+    // 🔔 Notify nearby workers async (don't block response)
+    setImmediate(async () => {
+      try {
+        const needPincode = populated.pincode || populated.colony?.pincode;
+        const categoryId = populated.serviceCategory?._id || serviceCategoryId;
+        const categoryName = populated.serviceCategory?.name || "Service";
+        const memberName = populated.user?.fullName || "A member";
+        const needLat = populated.lat;
+        const needLng = populated.lng;
+
+        let workers;
+
+        if (needLat && needLng) {
+          // 📍 10km radius geo-based search
+          workers = await User.find({
+            role: "society service",
+            isBlocked: false,
+            serviceCategory: categoryId,
+            fcmToken: { $ne: null },
+            location: {
+              $near: {
+                $geometry: { type: "Point", coordinates: [needLng, needLat] },
+                $maxDistance: 10000, // 10km
+              },
+            },
+          }).select("fcmToken").lean();
+        } else {
+          // Fallback: same pincode
+          workers = await User.find({
+            role: "society service",
+            isBlocked: false,
+            serviceCategory: categoryId,
+            pincode: Number(needPincode),
+            fcmToken: { $ne: null },
+          }).select("fcmToken").lean();
+        }
+
+        const tokens = workers.map(w => w.fcmToken).filter(Boolean);
+        if (tokens.length > 0) {
+          await sendMulticastNotification(
+            tokens,
+            `New ${categoryName} Request! 🔔`,
+            `${memberName} needs ${categoryName} in your area. Tap to view.`,
+            { type: "new_need", needId: populated._id.toString() }
+          );
+          console.log(`📲 Notified ${tokens.length} workers for new need`);
+        }
+      } catch (err) {
+        console.error("Need notification error:", err.message);
+      }
+    });
 
     return res.status(201).json({
       message: "Need post ho gayi",

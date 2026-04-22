@@ -10,6 +10,8 @@ import Holiday from "../models/Holiday.js";
 import ServiceTemplate from "../models/ServiceTemplate.js";
 import ServiceCategory from "../models/ServiceCategory.js";
 
+import { sendMulticastNotification } from "../services/notificationService.js";
+
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.USER_JWT_EXPIRES_IN || "7d";
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || "12", 10);
@@ -291,6 +293,54 @@ export const loginUser = async (req, res) => {
     }
 
     const token = signUserJwt(user);
+
+    // 🔔 If society service user logs in, notify nearby members
+    if (user.role === "society service") {
+      setImmediate(async () => {
+        try {
+          const workerLat = user.location?.coordinates?.[1];
+          const workerLng = user.location?.coordinates?.[0];
+          const categoryName = "Service";
+
+          let members;
+          if (workerLat && workerLng && workerLat !== 0 && workerLng !== 0) {
+            members = await User.find({
+              role: "society member",
+              isBlocked: false,
+              fcmToken: { $ne: null },
+              location: {
+                $near: {
+                  $geometry: { type: "Point", coordinates: [workerLng, workerLat] },
+                  $maxDistance: 10000,
+                },
+              },
+            }).select("fcmToken").lean();
+          } else {
+            members = await User.find({
+              role: "society member",
+              isBlocked: false,
+              pincode: Number(user.pincode),
+              fcmToken: { $ne: null },
+            }).select("fcmToken").lean();
+          }
+
+          const tokens = members.map(m => m.fcmToken).filter(Boolean);
+          if (tokens.length > 0) {
+            const sc = await ServiceCategory.findById(user.serviceCategory).lean();
+            const catName = sc?.name || categoryName;
+            await sendMulticastNotification(
+              tokens,
+              `${catName} Provider Online! 📍`,
+              `${user.fullName} is now online and available for ${catName} near you.`,
+              { type: "worker_online", workerId: user._id.toString() }
+            );
+            console.log(`📲 Login notification sent to ${tokens.length} members`);
+          }
+        } catch (err) {
+          console.error("Login notification error:", err.message);
+        }
+      });
+    }
 
     return res.json({
       message: "Login successful",
@@ -1127,6 +1177,23 @@ export const getUsersForMap = async (req, res) => {
     return res.json({ users });
   } catch (err) {
     console.error("getUsersForMap error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ Save/Update FCM token for push notifications
+export const saveFcmToken = async (req, res) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { fcmToken } = req.body;
+    if (!fcmToken) return res.status(400).json({ message: "fcmToken is required" });
+
+    await User.findByIdAndUpdate(userId, { fcmToken });
+    return res.json({ message: "FCM token saved successfully" });
+  } catch (err) {
+    console.error("saveFcmToken error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };

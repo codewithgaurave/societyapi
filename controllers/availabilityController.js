@@ -2,6 +2,7 @@
 import Availability from "../models/Availability.js";
 import User from "../models/User.js";
 import axios from "axios";
+import { sendMulticastNotification } from "../services/notificationService.js";
 
 // Helper: HH:mm basic validation
 const isValidTime = (t) => /^\d{2}:\d{2}$/.test(t);
@@ -188,6 +189,57 @@ export const addMyAvailability = async (req, res) => {
       .populate("user", "fullName mobileNumber serviceCategory role tatkalEnabled")
       .populate("colonies", "name address city pincode")
       .lean();
+
+    // 🔔 Notify nearby members async
+    setImmediate(async () => {
+      try {
+        const workerLat = lat ? parseFloat(lat) : null;
+        const workerLng = lng ? parseFloat(lng) : null;
+        const workerPincode = pincodeData || user.pincode;
+
+        const workerCategory = await (await import("../models/ServiceCategory.js")).default
+          .findById(user.serviceCategory).lean();
+        const categoryName = workerCategory?.name || "Service";
+
+        let members;
+
+        if (workerLat && workerLng) {
+          // 📍 10km radius geo-based search
+          members = await User.find({
+            role: "society member",
+            isBlocked: false,
+            fcmToken: { $ne: null },
+            location: {
+              $near: {
+                $geometry: { type: "Point", coordinates: [workerLng, workerLat] },
+                $maxDistance: 10000, // 10km
+              },
+            },
+          }).select("fcmToken").lean();
+        } else {
+          // Fallback: same pincode
+          members = await User.find({
+            role: "society member",
+            isBlocked: false,
+            pincode: Number(workerPincode),
+            fcmToken: { $ne: null },
+          }).select("fcmToken").lean();
+        }
+
+        const tokens = members.map(m => m.fcmToken).filter(Boolean);
+        if (tokens.length > 0) {
+          await sendMulticastNotification(
+            tokens,
+            `${categoryName} Available Near You! 🎉`,
+            `${user.fullName} is now available for ${categoryName} in your area.`,
+            { type: "worker_available", workerId: userId }
+          );
+          console.log(`📲 Notified ${tokens.length} members about worker availability`);
+        }
+      } catch (err) {
+        console.error("Availability notification error:", err.message);
+      }
+    });
 
     return res.status(201).json({
       message: "Availability added successfully",

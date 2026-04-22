@@ -18,6 +18,7 @@ import {
   getAllSocietyServiceUsers,
   listTatkalUsersByPincode,
   getUsersForMap,
+  saveFcmToken,
 } from "../controllers/userController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { uploadUserFields } from "../config/cloudinary.js";
@@ -62,6 +63,7 @@ router.put("/me", requireAuth, uploadUserFields, updateMyProfile);
 
 // 🔹 User: toggle tatkal seva — requires basic+ plan
 router.patch("/me/tatkal", requireAuth, requireServicePlan, setMyTatkalStatus);
+router.post("/me/fcm-token", requireAuth, saveFcmToken);
 
 // 🔹 Admin: list all users
 router.get("/", requireAuth, listUsers);
