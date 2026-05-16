@@ -53,6 +53,14 @@ const needSchema = new mongoose.Schema(
     lat: { type: Number },
     lng: { type: Number },
 
+    // ✅ Seen by workers
+    seenBy: [
+      {
+        worker: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        seenAt: { type: Date, default: Date.now },
+      },
+    ],
+
     // IST timestamps
     createdAtIST: { type: String },
     updatedAtIST: { type: String },

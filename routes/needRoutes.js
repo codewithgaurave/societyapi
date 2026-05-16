@@ -9,6 +9,7 @@ import {
   getColonySpecificNeeds,
   getNeedsByServiceCategoryAndPincode,
   getMyAvailableNeeds,
+  markNeedAsSeen,
 } from "../controllers/needController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireMemberPlan } from "../middleware/requireSubscription.js";
@@ -31,6 +32,9 @@ router.get("/my-available-needs/:userId", getMyAvailableNeeds);
 router.get("/user/:userId", getNeedsByUser);
 
 router.get("/:id/details", getNeedWithUserDetails);
+
+// 🔹 Mark need as seen by worker
+router.post("/:id/seen", requireAuth, markNeedAsSeen);
 
 // 🔹 Delete need
 router.delete("/:id", requireAuth, deleteNeed);

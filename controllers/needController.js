@@ -134,6 +134,27 @@ export const createNeed = async (req, res) => {
   }
 };
 
+// ✅ Mark need as seen by a worker
+export const markNeedAsSeen = async (req, res) => {
+  try {
+    const workerId = req.user?.sub;
+    if (!workerId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { id } = req.params;
+
+    // Add worker to seenBy only if not already there
+    await Need.findByIdAndUpdate(
+      id,
+      { $addToSet: { seenBy: { worker: workerId, seenAt: new Date() } } }
+    );
+
+    return res.json({ message: "Marked as seen" });
+  } catch (err) {
+    console.error("markNeedAsSeen error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ✅ Get all needs (public, optional filters)
 // GET /api/needs
 // GET /api/needs?serviceCategoryId=...&colonyId=...&status=open
@@ -517,7 +538,10 @@ export const getMyAvailableNeeds = async (req, res) => {
     return res.json({
       message: `${needs.length} needs milein aapke working area mein`,
       count: needs.length,
-      needs
+      needs: needs.map(n => ({
+        ...n,
+        seenByMe: n.seenBy?.some(s => s.worker?.toString() === userId) ?? false,
+      }))
     });
 
   } catch (err) {
