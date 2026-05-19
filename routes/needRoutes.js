@@ -10,6 +10,7 @@ import {
   getNeedsByServiceCategoryAndPincode,
   getMyAvailableNeeds,
   markNeedAsSeen,
+  closeNeed,
 } from "../controllers/needController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireMemberPlan } from "../middleware/requireSubscription.js";
@@ -33,7 +34,10 @@ router.get("/user/:userId", getNeedsByUser);
 
 router.get("/:id/details", getNeedWithUserDetails);
 
-// 🔹 Mark need as seen by worker — must be before /:id to avoid conflict
+// 🔹 Close need (by member who posted it)
+router.patch("/:id/close", requireAuth, closeNeed);
+
+// 🔹 Mark need as seen by worker
 router.post("/:id/seen", requireAuth, markNeedAsSeen);
 
 // 🔹 Delete need

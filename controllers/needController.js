@@ -134,6 +134,79 @@ export const createNeed = async (req, res) => {
   }
 };
 
+// ✅ Close a need (by the member who posted it)
+export const closeNeed = async (req, res) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { id } = req.params;
+
+    const need = await Need.findById(id)
+      .populate("serviceCategory", "name")
+      .populate("colony", "pincode")
+      .lean();
+
+    if (!need) return res.status(404).json({ message: "Need not found" });
+    if (need.user.toString() !== userId) return res.status(403).json({ message: "Not your need" });
+    if (need.status === "closed") return res.json({ message: "Already closed" });
+
+    await Need.findByIdAndUpdate(id, { status: "closed" });
+
+    // 🔔 Notify nearby workers async
+    setImmediate(async () => {
+      try {
+        const categoryName = need.serviceCategory?.name || "Service";
+        const needLat = need.lat;
+        const needLng = need.lng;
+        const needPincode = need.pincode || need.colony?.pincode;
+
+        let workers;
+        if (needLat && needLng) {
+          workers = await User.find({
+            role: "society service",
+            isBlocked: false,
+            serviceCategory: need.serviceCategory?._id,
+            fcmToken: { $ne: null },
+            location: {
+              $near: {
+                $geometry: { type: "Point", coordinates: [needLng, needLat] },
+                $maxDistance: 10000,
+              },
+            },
+          }).select("fcmToken").lean();
+        } else {
+          workers = await User.find({
+            role: "society service",
+            isBlocked: false,
+            serviceCategory: need.serviceCategory?._id,
+            pincode: Number(needPincode),
+            fcmToken: { $ne: null },
+          }).select("fcmToken").lean();
+        }
+
+        const tokens = workers.map(w => w.fcmToken).filter(Boolean);
+        if (tokens.length > 0) {
+          await sendMulticastNotification(
+            tokens,
+            `${categoryName} Request Closed ❌`,
+            `A ${categoryName} request in your area has been closed by the member.`,
+            { type: "need_closed", needId: id }
+          );
+          console.log(`📲 Notified ${tokens.length} workers about closed need`);
+        }
+      } catch (err) {
+        console.error("closeNeed notification error:", err.message);
+      }
+    });
+
+    return res.json({ message: "Need closed successfully" });
+  } catch (err) {
+    console.error("closeNeed error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ✅ Mark need as seen by a worker
 export const markNeedAsSeen = async (req, res) => {
   try {
