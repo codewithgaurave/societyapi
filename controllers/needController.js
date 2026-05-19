@@ -143,10 +143,12 @@ export const markNeedAsSeen = async (req, res) => {
     const { id } = req.params;
 
     // Add worker to seenBy only if not already there
-    await Need.findByIdAndUpdate(
+    const need = await Need.findByIdAndUpdate(
       id,
       { $addToSet: { seenBy: { worker: workerId, seenAt: new Date() } } }
     );
+
+    if (!need) return res.status(404).json({ message: "Need not found" });
 
     return res.json({ message: "Marked as seen" });
   } catch (err) {
@@ -540,7 +542,9 @@ export const getMyAvailableNeeds = async (req, res) => {
       count: needs.length,
       needs: needs.map(n => ({
         ...n,
-        seenByMe: n.seenBy?.some(s => s.worker?.toString() === userId) ?? false,
+        seenByMe: Array.isArray(n.seenBy) && n.seenBy.some(s =>
+          s.worker && s.worker.toString() === String(userId)
+        ),
       }))
     });
 

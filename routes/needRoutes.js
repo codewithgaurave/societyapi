@@ -33,7 +33,7 @@ router.get("/user/:userId", getNeedsByUser);
 
 router.get("/:id/details", getNeedWithUserDetails);
 
-// 🔹 Mark need as seen by worker
+// 🔹 Mark need as seen by worker — must be before /:id to avoid conflict
 router.post("/:id/seen", requireAuth, markNeedAsSeen);
 
 // 🔹 Delete need
