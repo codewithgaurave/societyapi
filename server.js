@@ -20,6 +20,7 @@ import needRoutes from "./routes/needRoutes.js";
 import basicUserRoutes from "./routes/basicUserRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import mainCategoryRoutes from "./routes/mainCategoryRoutes.js";
+import appVersionRoutes from "./routes/appVersionRoutes.js";
 
 
 const app = express();
@@ -63,6 +64,7 @@ app.use("/api/needs", needRoutes);
 app.use("/api/basic-users", basicUserRoutes);
 app.use("/api/main-categories", mainCategoryRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/app-version", appVersionRoutes);
 
 // Health / root
 app.get("/", (_req, res) => res.send("✅ API is running..."));
