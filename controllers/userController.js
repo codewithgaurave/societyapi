@@ -294,53 +294,7 @@ export const loginUser = async (req, res) => {
 
     const token = signUserJwt(user);
 
-    // 🔔 If society service user logs in, notify nearby members
-    if (user.role === "society service") {
-      setImmediate(async () => {
-        try {
-          const workerLat = user.location?.coordinates?.[1];
-          const workerLng = user.location?.coordinates?.[0];
-          const categoryName = "Service";
-
-          let members;
-          if (workerLat && workerLng && workerLat !== 0 && workerLng !== 0) {
-            members = await User.find({
-              role: "society member",
-              isBlocked: false,
-              fcmToken: { $ne: null },
-              location: {
-                $near: {
-                  $geometry: { type: "Point", coordinates: [workerLng, workerLat] },
-                  $maxDistance: 10000,
-                },
-              },
-            }).select("fcmToken").lean();
-          } else {
-            members = await User.find({
-              role: "society member",
-              isBlocked: false,
-              pincode: Number(user.pincode),
-              fcmToken: { $ne: null },
-            }).select("fcmToken").lean();
-          }
-
-          const tokens = members.map(m => m.fcmToken).filter(Boolean);
-          if (tokens.length > 0) {
-            const sc = await ServiceCategory.findById(user.serviceCategory).lean();
-            const catName = sc?.name || categoryName;
-            await sendMulticastNotification(
-              tokens,
-              `${catName} Provider Online! 📍`,
-              `${user.fullName} is now online and available for ${catName} near you.`,
-              { type: "worker_online", workerId: user._id.toString() }
-            );
-            console.log(`📲 Login notification sent to ${tokens.length} members`);
-          }
-        } catch (err) {
-          console.error("Login notification error:", err.message);
-        }
-      });
-    }
+    // Login notification logic removed
 
     return res.json({
       message: "Login successful",

@@ -8,7 +8,7 @@ const router = express.Router();
 // Public — app checks this on splash
 router.get("/", getAppVersion);
 
-// Temporarily public for initial setup — will be secured after
-router.post("/", setAppVersion);
+// Admin only — set required version
+router.post("/", authenticateAdmin, setAppVersion);
 
 export default router;
