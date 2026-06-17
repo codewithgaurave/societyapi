@@ -24,8 +24,8 @@ export const requireSubscription = (allowedPlans = null) => async (req, res, nex
       });
     }
 
-    // Check expiry (basic has no expiry since durationDays: 0)
-    if (!["free", "basic"].includes(subscription.plan) && subscription.endDate && new Date() > new Date(subscription.endDate)) {
+    // Check expiry (free has no expiry)
+    if (subscription.plan !== "free" && subscription.endDate && new Date() > new Date(subscription.endDate)) {
       return res.status(403).json({
         message: "Your subscription has expired. Please renew to continue.",
         code: "SUBSCRIPTION_EXPIRED",
@@ -58,8 +58,8 @@ export const requireSubscription = (allowedPlans = null) => async (req, res, nex
  * Shorthand middlewares for common checks
  */
 
-// Society Service: basic or above (basic is free default)
-export const requireServicePlan = requireSubscription(["basic", "pro", "premium"]);
+// Society Service: starter or above
+export const requireServicePlan = requireSubscription(["starter", "basic", "pro", "premium"]);
 
 // Society Service: pro or premium only
 export const requireProPlan = requireSubscription(["pro", "premium"]);

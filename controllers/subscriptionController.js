@@ -15,25 +15,31 @@ const PLANS = {
   free_service: {
     name: "free", displayName: "Free", price: 0, durationDays: 0,
     userType: "society service",
-    features: ["Basic profile listing", "View 5 needs/month", "Basic search visibility"],
+    features: ["Business Profile Listing"],
     limits: { needsPerMonth: 5, templatesAllowed: 0, tatkalEnabled: false, priorityListing: false, verifiedBadge: false, featuredInTatkal: false, analyticsEnabled: false, whatsappLeads: false }
   },
-  basic: {
-    name: "basic", displayName: "Basic", price: 0, durationDays: 0,
+  starter: {
+    name: "starter", displayName: "Starter", price: 49, durationDays: 30,
     userType: "society service",
-    features: ["Unlimited needs view", "Tatkal toggle ON/OFF", "3 service templates", "Standard listing"],
+    features: ["Business Profile Listing", "Contact Visibility", "Basic Search Presence", "1 Custom Service Template"],
+    limits: { needsPerMonth: -1, templatesAllowed: 1, tatkalEnabled: false, priorityListing: false, verifiedBadge: false, featuredInTatkal: false, analyticsEnabled: false, whatsappLeads: false }
+  },
+  basic: {
+    name: "basic", displayName: "Basic", price: 99, durationDays: 30,
+    userType: "society service",
+    features: ["Business Profile Listing", "Contact Visibility", "Basic Search Presence", "Unlimited Needs View", "Tatkal ON/OFF", "3 Service Templates"],
     limits: { needsPerMonth: -1, templatesAllowed: 3, tatkalEnabled: true, priorityListing: false, verifiedBadge: false, featuredInTatkal: false, analyticsEnabled: false, whatsappLeads: false }
   },
   pro: {
     name: "pro", displayName: "Pro", price: 199, durationDays: 30,
     userType: "society service",
-    features: ["Everything in Basic", "Priority listing (top results)", "Unlimited templates", "Verified badge on profile"],
-    limits: { needsPerMonth: -1, templatesAllowed: -1, tatkalEnabled: true, priorityListing: true, verifiedBadge: true, featuredInTatkal: false, analyticsEnabled: false, whatsappLeads: false }
+    features: ["Business Profile Listing", "Contact Visibility", "Priority Listing", "Verified Badge", "Unlimited Needs View", "Tatkal ON/OFF", "5 Service Templates"],
+    limits: { needsPerMonth: -1, templatesAllowed: 5, tatkalEnabled: true, priorityListing: true, verifiedBadge: true, featuredInTatkal: false, analyticsEnabled: false, whatsappLeads: false }
   },
   premium: {
     name: "premium", displayName: "Premium", price: 499, durationDays: 30,
     userType: "society service",
-    features: ["Everything in Pro", "Featured in Tatkal search", "Profile analytics", "Direct WhatsApp leads"],
+    features: ["Business Profile Listing", "Contact Visibility", "Top Priority Listing", "Featured Business Tag", "Verified Badge", "Unlimited Needs View", "Tatkal ON/OFF", "Unlimited Service Templates", "Visibility Boost", "Priority Support"],
     limits: { needsPerMonth: -1, templatesAllowed: -1, tatkalEnabled: true, priorityListing: true, verifiedBadge: true, featuredInTatkal: true, analyticsEnabled: true, whatsappLeads: true }
   },
   // Member plans
@@ -77,7 +83,7 @@ export const getMySubscription = async (req, res) => {
       const user = await User.findById(userId).lean();
       if (!user) return res.status(404).json({ message: "User not found" });
 
-      const defaultPlan = user.role === "society service" ? "basic" : "free";
+      const defaultPlan = "free";
       subscription = await Subscription.create({
         user: userId,
         plan: defaultPlan,
@@ -87,11 +93,11 @@ export const getMySubscription = async (req, res) => {
       });
     }
 
-    // Check if expired (basic is free/no-expiry, skip it)
-    if (!['free','basic'].includes(subscription.plan) && subscription.endDate && new Date() > new Date(subscription.endDate)) {
+    // Check if expired (free is no-expiry, skip it)
+    if (subscription.plan !== "free" && subscription.endDate && new Date() > new Date(subscription.endDate)) {
       await Subscription.findByIdAndUpdate(subscription._id, { status: "expired" });
-      // Downgrade to basic for service, free for member
-      const fallbackPlan = subscription.userType === "society service" ? "basic" : "free";
+      // Downgrade to free for both service and member
+      const fallbackPlan = "free";
       subscription = await Subscription.create({
         user: userId,
         plan: fallbackPlan,
@@ -102,10 +108,10 @@ export const getMySubscription = async (req, res) => {
     }
 
     // Get plan details
-    const planKey = (subscription.plan === "free" || subscription.plan === "basic")
-      ? (subscription.userType === "society service" ? (subscription.plan === "basic" ? "basic" : "free_service") : "free_member")
+    const planKey = subscription.plan === "free"
+      ? (subscription.userType === "society service" ? "free_service" : "free_member")
       : subscription.plan;
-    const planDetails = PLANS[planKey] || PLANS["basic"];
+    const planDetails = PLANS[planKey] || PLANS["free_service"];
 
     return res.json({ subscription, planDetails });
   } catch (err) {
@@ -127,8 +133,8 @@ export const upgradeSubscription = async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     // Validate plan for user type
-    const planKey = (plan === "free" || plan === "basic")
-      ? (user.role === "society service" ? (plan === "basic" ? "basic" : "free_service") : "free_member")
+    const planKey = plan === "free"
+      ? (user.role === "society service" ? "free_service" : "free_member")
       : plan;
     const planDetails = PLANS[planKey];
     if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
@@ -137,8 +143,8 @@ export const upgradeSubscription = async (req, res) => {
     // Cancel existing active subscription
     await Subscription.updateMany({ user: userId, status: "active" }, { status: "cancelled" });
 
-    // basic and free have no expiry
-    const endDate = (plan === "free" || plan === "basic") ? null : new Date(Date.now() + planDetails.durationDays * 24 * 60 * 60 * 1000);
+    // free has no expiry
+    const endDate = (plan === "free") ? null : new Date(Date.now() + planDetails.durationDays * 24 * 60 * 60 * 1000);
 
     const subscription = await Subscription.create({
       user: userId,

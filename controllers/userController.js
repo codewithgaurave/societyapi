@@ -3,6 +3,8 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import axios from "axios";
 import User from "../models/User.js";
+import Subscription from "../models/Subscription.js";
+import { PLANS } from "./subscriptionController.js";
 
 // ✅ NEW imports for combined details
 import Availability from "../models/Availability.js";
@@ -457,6 +459,19 @@ export const setMyTatkalStatus = async (req, res) => {
     if (user.role !== "society service") {
       return res.status(400).json({
         message: "Tatkal seva toggle only allowed for society service users",
+      });
+    }
+
+    // Enforce Tatkal eligibility check
+    const subscription = await Subscription.findOne({ user: userId, status: "active" }).lean();
+    const planKey = (subscription?.plan === "free" || !subscription)
+      ? "free_service"
+      : subscription.plan;
+    const planDetails = PLANS[planKey] || PLANS["free_service"];
+    if (!planDetails?.limits?.tatkalEnabled) {
+      return res.status(403).json({
+        message: `Tatkal toggle is not allowed on your current plan (${planDetails.displayName}). Please upgrade to Basic or above.`,
+        code: "TATKAL_NOT_ALLOWED",
       });
     }
 

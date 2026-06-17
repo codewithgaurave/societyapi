@@ -1,6 +1,8 @@
 // controllers/serviceTemplateController.js
 import ServiceTemplate from "../models/ServiceTemplate.js";
 import User from "../models/User.js";
+import Subscription from "../models/Subscription.js";
+import { PLANS } from "./subscriptionController.js";
 
 // ✅ Create template (society service user)
 export const createServiceTemplate = async (req, res) => {
@@ -28,6 +30,24 @@ export const createServiceTemplate = async (req, res) => {
       return res.status(400).json({
         message: "Only society service users can create service templates",
       });
+    }
+
+    // Enforce template creation limits
+    const subscription = await Subscription.findOne({ user: userId, status: "active" }).lean();
+    const planKey = (subscription?.plan === "free" || !subscription)
+      ? "free_service"
+      : subscription.plan;
+    const planDetails = PLANS[planKey] || PLANS["free_service"];
+    const limit = planDetails?.limits?.templatesAllowed ?? 0;
+
+    if (limit !== -1) {
+      const activeCount = await ServiceTemplate.countDocuments({ user: userId });
+      if (activeCount >= limit) {
+        return res.status(403).json({
+          message: `Template creation limit reached. Your current plan (${planDetails.displayName}) allows only ${limit} templates. Please upgrade your plan.`,
+          code: "TEMPLATE_LIMIT_EXCEEDED",
+        });
+      }
     }
 
     const template = await ServiceTemplate.create({
