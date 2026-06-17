@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import axios from "axios";
 import User from "../models/User.js";
 import Subscription from "../models/Subscription.js";
+import Need from "../models/Need.js";
 import { PLANS } from "./subscriptionController.js";
 
 // ✅ NEW imports for combined details
@@ -890,6 +891,37 @@ export const deleteUser = async (req, res) => {
     });
   } catch (err) {
     console.error("deleteUser error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ User: delete own account and clean up all associated data
+export const deleteMyAccount = async (req, res) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const user = await User.findByIdAndDelete(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Clean up related documents to prevent dangling records
+    await Promise.all([
+      Availability.deleteMany({ user: userId }),
+      Holiday.deleteMany({ user: userId }),
+      ServiceTemplate.deleteMany({ user: userId }),
+      Subscription.deleteMany({ user: userId }),
+      Need.deleteMany({ user: userId })
+    ]);
+
+    return res.json({
+      message: "Account and all associated data deleted successfully.",
+    });
+  } catch (err) {
+    console.error("deleteMyAccount error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };

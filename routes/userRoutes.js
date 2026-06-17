@@ -10,6 +10,7 @@ import {
   updateMyProfile,
   adminUpdateUser,
   deleteUser,
+  deleteMyAccount,
   setMyTatkalStatus,
   listTatkalUsers,
   getUserDetailsById,
@@ -60,6 +61,9 @@ router.get("/me", requireAuth, getMyProfile);
 
 // 🔹 User: update own profile
 router.put("/me", requireAuth, uploadUserFields, updateMyProfile);
+
+// 🔹 User: delete own account
+router.delete("/me", requireAuth, deleteMyAccount);
 
 // 🔹 User: toggle tatkal seva — requires basic+ plan
 router.patch("/me/tatkal", requireAuth, requireServicePlan, setMyTatkalStatus);
