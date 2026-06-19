@@ -14,14 +14,22 @@ export const requireSubscription = (allowedPlans = null) => async (req, res, nex
     const userId = req.user?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const subscription = await Subscription.findOne({ user: userId, status: "active" }).lean();
+    let subscription = await Subscription.findOne({ user: userId, status: "active" }).lean();
 
-    // No subscription at all
+    // ✅ Auto-assign free subscription if none exists (instead of blocking with 403)
     if (!subscription) {
-      return res.status(403).json({
-        message: "Subscription required. Please activate a plan to continue.",
-        code: "NO_SUBSCRIPTION",
+      const User = (await import("../models/User.js")).default;
+      const user = await User.findById(userId).lean();
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      subscription = await Subscription.create({
+        user: userId,
+        plan: "free",
+        userType: user.role,
+        status: "active",
+        price: 0,
       });
+      console.log(`✅ Auto-assigned free subscription to user ${userId} (role: ${user.role})`);
     }
 
     // Check expiry (free has no expiry)
