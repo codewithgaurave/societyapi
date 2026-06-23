@@ -8,6 +8,9 @@ import {
   getAllSubscriptions,
   createOrder,
   verifyPayment,
+  createSubscription,
+  createQRCode,
+  verifyQRCodePayment,
 } from "../controllers/subscriptionController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { authenticateAdmin } from "../middleware/adminAuth.js";
@@ -22,7 +25,10 @@ router.get("/my", requireAuth, getMySubscription);
 router.post("/upgrade", requireAuth, upgradeSubscription);
 router.get("/check-need-limit", requireAuth, checkNeedLimit);
 router.post("/create-order", requireAuth, createOrder);
+router.post("/create-subscription", requireAuth, createSubscription);
+router.post("/create-qr-code", requireAuth, createQRCode);
 router.post("/verify-payment", requireAuth, verifyPayment);
+router.post("/verify-qr-payment", requireAuth, verifyQRCodePayment);
 
 // Admin only
 router.get("/all", authenticateAdmin, getAllSubscriptions);

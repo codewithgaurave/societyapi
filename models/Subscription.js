@@ -30,6 +30,7 @@ const subscriptionSchema = new mongoose.Schema(
     price: { type: Number, default: 0 },
     paymentId: { type: String }, // Razorpay payment ID
     orderId: { type: String },   // Razorpay order ID
+    subscriptionId: { type: String }, // Razorpay subscription ID
     needsUsedThisMonth: { type: Number, default: 0 },
     needsResetDate: { type: Date, default: Date.now },
 

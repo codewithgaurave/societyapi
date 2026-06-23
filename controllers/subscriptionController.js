@@ -9,6 +9,40 @@ const getRazorpay = () => new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
+const cachedPlans = {};
+
+const getOrCreateRazorpayPlanId = async (planDetails) => {
+  let razorpayPlanId = cachedPlans[planDetails.name];
+  if (!razorpayPlanId) {
+    try {
+      const response = await getRazorpay().plans.all({ count: 100 });
+      const existingPlan = response.items?.find(
+        (p) => p.item?.name === planDetails.displayName && p.item?.amount === planDetails.price * 100
+      );
+      if (existingPlan) {
+        razorpayPlanId = existingPlan.id;
+      } else {
+        const newPlan = await getRazorpay().plans.create({
+          period: "monthly",
+          interval: 1,
+          item: {
+            name: planDetails.displayName,
+            amount: planDetails.price * 100,
+            currency: "INR",
+            description: `${planDetails.displayName} Subscription Plan`,
+          },
+        });
+        razorpayPlanId = newPlan.id;
+      }
+      cachedPlans[planDetails.name] = razorpayPlanId;
+    } catch (e) {
+      console.error("Error in getOrCreateRazorpayPlanId:", e);
+      throw e;
+    }
+  }
+  return razorpayPlanId;
+};
+
 // ✅ Plan definitions
 const PLANS = {
   // Worker plans
@@ -273,16 +307,24 @@ export const verifyPayment = async (req, res) => {
     const userId = req.user?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan } = req.body;
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !plan) {
+    const { razorpay_order_id, razorpay_subscription_id, razorpay_payment_id, razorpay_signature, plan } = req.body;
+    if ((!razorpay_order_id && !razorpay_subscription_id) || !razorpay_payment_id || !razorpay_signature || !plan) {
       return res.status(400).json({ message: "Missing payment details" });
     }
 
     // Verify signature
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      .digest("hex");
+    let expectedSignature;
+    if (razorpay_order_id) {
+      expectedSignature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest("hex");
+    } else {
+      expectedSignature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+        .update(`${razorpay_subscription_id}|${razorpay_payment_id}`)
+        .digest("hex");
+    }
 
     if (expectedSignature !== razorpay_signature) {
       return res.status(400).json({ message: "Payment verification failed" });
@@ -308,7 +350,8 @@ export const verifyPayment = async (req, res) => {
       endDate,
       price: planDetails.price,
       paymentId: razorpay_payment_id,
-      orderId: razorpay_order_id,
+      orderId: razorpay_order_id || null,
+      subscriptionId: razorpay_subscription_id || null,
     });
 
     return res.status(201).json({
@@ -319,6 +362,169 @@ export const verifyPayment = async (req, res) => {
   } catch (err) {
     console.error("verifyPayment error:", err);
     return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ Create Razorpay Subscription (Autopay)
+export const createSubscription = async (req, res) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { plan } = req.body;
+    if (!plan) return res.status(400).json({ message: "plan is required" });
+
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const planKey = plan === "free"
+      ? (user.role === "society service" ? "free_service" : "free_member")
+      : plan;
+    const planDetails = PLANS[planKey];
+    if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
+    if (planDetails.userType !== user.role) return res.status(400).json({ message: "Plan not available for your role" });
+    if (planDetails.price === 0) return res.status(400).json({ message: "This plan is free, no payment required" });
+
+    const rzpPlanId = await getOrCreateRazorpayPlanId(planDetails);
+
+    const subscription = await getRazorpay().subscriptions.create({
+      plan_id: rzpPlanId,
+      total_count: 12, // 1 year mandate
+      quantity: 1,
+      customer_notify: 1,
+      notes: { userId, plan, userType: user.role },
+    });
+
+    return res.json({
+      subscriptionId: subscription.id,
+      keyId: process.env.RAZORPAY_KEY_ID,
+      planDetails,
+    });
+  } catch (err) {
+    console.error("createSubscription error:", JSON.stringify(err?.error || err));
+    return res.status(500).json({
+      message: "Server error",
+      detail: err?.error?.description || err?.message || String(err),
+    });
+  }
+};
+
+// ✅ Create Razorpay QR Code
+export const createQRCode = async (req, res) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { plan } = req.body;
+    if (!plan) return res.status(400).json({ message: "plan is required" });
+
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const planKey = plan === "free"
+      ? (user.role === "society service" ? "free_service" : "free_member")
+      : plan;
+    const planDetails = PLANS[planKey];
+    if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
+    if (planDetails.userType !== user.role) return res.status(400).json({ message: "Plan not available for your role" });
+    if (planDetails.price === 0) return res.status(400).json({ message: "This plan is free, no payment required" });
+
+    const qr = await getRazorpay().qrCode.create({
+      type: "upi_qr",
+      name: "HOODLY",
+      usage: "single_use",
+      fixed_amount: true,
+      payment_amount: planDetails.price * 100, // paise
+      description: `${planDetails.displayName} Plan - ${user.fullName}`,
+      notes: { userId, plan, userType: user.role },
+    });
+
+    return res.json({
+      qrCodeId: qr.id,
+      qrImageUrl: qr.image_url,
+      qrString: qr.payment_code,
+      amount: planDetails.price,
+      keyId: process.env.RAZORPAY_KEY_ID,
+      planDetails,
+    });
+  } catch (err) {
+    console.error("createQRCode error:", JSON.stringify(err?.error || err));
+    return res.status(500).json({
+      message: "Server error",
+      detail: err?.error?.description || err?.message || String(err),
+    });
+  }
+};
+
+// ✅ Verify Razorpay QR Code payment & activate subscription
+export const verifyQRCodePayment = async (req, res) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { qrCodeId, plan } = req.body;
+    if (!qrCodeId || !plan) {
+      return res.status(400).json({ message: "Missing QR Code ID or plan" });
+    }
+
+    const qr = await getRazorpay().qrCode.fetch(qrCodeId);
+    if (!qr) {
+      return res.status(404).json({ message: "QR Code not found" });
+    }
+
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const planDetails = PLANS[plan];
+    if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
+
+    const expectedAmount = planDetails.price * 100; // in paise
+    const receivedAmount = qr.payments_amount_received || 0;
+
+    if (receivedAmount < expectedAmount) {
+      return res.status(400).json({
+        message: "Payment not received yet",
+        receivedAmount,
+        expectedAmount,
+      });
+    }
+
+    // Payment is verified! Get the last payment ID if available
+    let paymentId = `qr_pay_${qrCodeId}`;
+    try {
+      const paymentsResponse = await getRazorpay().qrCode.fetchPayments(qrCodeId);
+      if (paymentsResponse?.items && paymentsResponse.items.length > 0) {
+        paymentId = paymentsResponse.items[0].id;
+      }
+    } catch (e) {
+      console.warn("Could not fetch payments list for QR code, using placeholder ID:", e.message);
+    }
+
+    // Cancel existing active subscriptions
+    await Subscription.updateMany({ user: userId, status: "active" }, { status: "cancelled" });
+
+    const endDate = new Date(Date.now() + planDetails.durationDays * 24 * 60 * 60 * 1000);
+
+    const subscription = await Subscription.create({
+      user: userId,
+      plan,
+      userType: user.role,
+      status: "active",
+      startDate: new Date(),
+      endDate,
+      price: planDetails.price,
+      paymentId: paymentId,
+      orderId: qrCodeId, // Store QR code ID under orderId so we know how it was paid
+    });
+
+    return res.status(201).json({
+      message: `Subscription activated: ${planDetails.displayName}`,
+      subscription,
+      planDetails,
+    });
+  } catch (err) {
+    console.error("verifyQRCodePayment error:", err);
+    return res.status(500).json({ message: "Server error", detail: err.message });
   }
 };
 
