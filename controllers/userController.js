@@ -635,7 +635,37 @@ export const listTatkalUsers = async (req, res) => {
       console.log(`📅 Availability filtering applied: ${users.length} remain`);
     }
 
-    return res.json({ users });
+    // Filter/mask contact details for free plan workers
+    const allUserIds = users.map(u => (u._id || u.id).toString());
+    const subscriptions = await Subscription.find({
+      user: { $in: allUserIds },
+      status: "active"
+    }).lean();
+
+    const subMap = new Map();
+    subscriptions.forEach(sub => {
+      subMap.set(sub.user.toString(), sub.plan);
+    });
+
+    const sanitizedUsers = users.map(user => {
+      const userIdStr = (user._id || user.id).toString();
+      const plan = subMap.get(userIdStr) || "free";
+      if (plan === "free" && user.role === "society service") {
+        return {
+          ...user,
+          mobileNumber: "",
+          whatsappNumber: "",
+          email: "",
+          isFreePlan: true
+        };
+      }
+      return {
+        ...user,
+        isFreePlan: false
+      };
+    });
+
+    return res.json({ users: sanitizedUsers });
   } catch (err) {
     console.error("❌ listTatkalUsers server error:", err);
     return res.status(500).json({ 
@@ -750,7 +780,37 @@ export const listTatkalUsersByPincode = async (req, res) => {
     const availableUserIds = availableUsers.map(av => av.user ? av.user._id.toString() : null).filter(id => id);
     users = users.filter(user => availableUserIds.includes(user._id.toString()));
 
-    return res.json({ users });
+    // Filter/mask contact details for free plan workers
+    const allUserIds = users.map(u => (u._id || u.id).toString());
+    const subscriptions = await Subscription.find({
+      user: { $in: allUserIds },
+      status: "active"
+    }).lean();
+
+    const subMap = new Map();
+    subscriptions.forEach(sub => {
+      subMap.set(sub.user.toString(), sub.plan);
+    });
+
+    const sanitizedUsers = users.map(user => {
+      const userIdStr = (user._id || user.id).toString();
+      const plan = subMap.get(userIdStr) || "free";
+      if (plan === "free" && user.role === "society service") {
+        return {
+          ...user,
+          mobileNumber: "",
+          whatsappNumber: "",
+          email: "",
+          isFreePlan: true
+        };
+      }
+      return {
+        ...user,
+        isFreePlan: false
+      };
+    });
+
+    return res.json({ users: sanitizedUsers });
   } catch (err) {
     console.error("listTatkalUsersByPincode error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -1000,6 +1060,18 @@ export const getUserDetailsById = async (req, res) => {
 
     const hasTemplates = templates.length > 0;
 
+    const subscription = await Subscription.findOne({ user: id, status: "active" }).lean();
+    const plan = subscription?.plan || "free";
+
+    if (plan === "free" && user.role === "society service") {
+      user.mobileNumber = "";
+      user.whatsappNumber = "";
+      user.email = "";
+      user.isFreePlan = true;
+    } else {
+      user.isFreePlan = false;
+    }
+
     return res.json({
       user,
       availability: availabilityList,
@@ -1027,7 +1099,35 @@ export const getAllUsersPublic = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    return res.json({ users });
+    const allUserIds = users.map(u => u._id.toString());
+    const subscriptions = await Subscription.find({
+      user: { $in: allUserIds },
+      status: "active"
+    }).lean();
+
+    const subMap = new Map();
+    subscriptions.forEach(sub => {
+      subMap.set(sub.user.toString(), sub.plan);
+    });
+
+    const sanitizedUsers = users.map(user => {
+      const plan = subMap.get(user._id.toString()) || "free";
+      if (plan === "free" && user.role === "society service") {
+        return {
+          ...user,
+          mobileNumber: "",
+          whatsappNumber: "",
+          email: "",
+          isFreePlan: true
+        };
+      }
+      return {
+        ...user,
+        isFreePlan: false
+      };
+    });
+
+    return res.json({ users: sanitizedUsers });
   } catch (err) {
     console.error("getAllUsersPublic error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -1149,11 +1249,40 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
     
     const allUsers = Array.from(userMap.values());
 
+    // Filter/mask contact details for free plan workers
+    const allUserIds = allUsers.map(u => u._id.toString());
+    const subscriptions = await Subscription.find({
+      user: { $in: allUserIds },
+      status: "active"
+    }).lean();
+
+    const subMap = new Map();
+    subscriptions.forEach(sub => {
+      subMap.set(sub.user.toString(), sub.plan);
+    });
+
+    const sanitizedUsers = allUsers.map(user => {
+      const plan = subMap.get(user._id.toString()) || "free";
+      if (plan === "free" && user.role === "society service") {
+        return {
+          ...user,
+          mobileNumber: "",
+          whatsappNumber: "",
+          email: "",
+          isFreePlan: true
+        };
+      }
+      return {
+        ...user,
+        isFreePlan: false
+      };
+    });
+
     console.log(`✅ Found ${allUsers.length} users for pincode ${pincode}`);
 
     return res.json({
-      count: allUsers.length,
-      users: allUsers,
+      count: sanitizedUsers.length,
+      users: sanitizedUsers,
       filters: {
         pincode: Number(pincode),
         serviceCategoryId
@@ -1175,7 +1304,35 @@ export const getUsersForMap = async (req, res) => {
       .populate("serviceCategory", "name")
       .lean();
 
-    return res.json({ users });
+    const allUserIds = users.map(u => u._id.toString());
+    const subscriptions = await Subscription.find({
+      user: { $in: allUserIds },
+      status: "active"
+    }).lean();
+
+    const subMap = new Map();
+    subscriptions.forEach(sub => {
+      subMap.set(sub.user.toString(), sub.plan);
+    });
+
+    const sanitizedUsers = users.map(user => {
+      const plan = subMap.get(user._id.toString()) || "free";
+      if (plan === "free" && user.role === "society service") {
+        return {
+          ...user,
+          mobileNumber: "",
+          whatsappNumber: "",
+          email: "",
+          isFreePlan: true
+        };
+      }
+      return {
+        ...user,
+        isFreePlan: false
+      };
+    });
+
+    return res.json({ users: sanitizedUsers });
   } catch (err) {
     console.error("getUsersForMap error:", err);
     return res.status(500).json({ message: "Server error" });
