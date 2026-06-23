@@ -449,9 +449,13 @@ export const createQRCode = async (req, res) => {
     });
   } catch (err) {
     console.error("createQRCode error:", JSON.stringify(err?.error || err));
+    let detail = err?.error?.description || err?.message || String(err);
+    if (detail.includes("not found on the server")) {
+      detail = "QR Code (Smart Collect) feature is not enabled on your Razorpay merchant account. Please enable 'Smart Collect' or 'QR Codes' in the Product Settings of your Razorpay Dashboard.";
+    }
     return res.status(500).json({
       message: "Server error",
-      detail: err?.error?.description || err?.message || String(err),
+      detail: detail,
     });
   }
 };
