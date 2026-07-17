@@ -21,15 +21,18 @@ import basicUserRoutes from "./routes/basicUserRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import mainCategoryRoutes from "./routes/mainCategoryRoutes.js";
 import appVersionRoutes from "./routes/appVersionRoutes.js";
+import planRoutes from "./routes/planRoutes.js"; 
 
 
 const app = express();
 
 // Security & logs
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(
   cors({
-    origin: true,
+    origin: function (origin, callback) {
+      callback(null, true); // Allow all origins dynamically
+    },
     credentials: true,
   })
 );
@@ -64,6 +67,7 @@ app.use("/api/needs", needRoutes);
 app.use("/api/basic-users", basicUserRoutes);
 app.use("/api/main-categories", mainCategoryRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/plans", planRoutes); 
 app.use("/api/app-version", appVersionRoutes);
 
 // Health / root
@@ -86,5 +90,5 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ message: "Internal server error" });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = 5001;
 app.listen(PORT, () => console.log(`🚀 Server on :${PORT}`));

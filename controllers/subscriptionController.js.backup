@@ -1,6 +1,5 @@
 // controllers/subscriptionController.js
 import Subscription from "../models/Subscription.js";
-import Plan from "../models/Plan.js";
 import User from "../models/User.js";
 import Razorpay from "razorpay";
 import crypto from "crypto";
@@ -45,15 +44,51 @@ const getOrCreateRazorpayPlanId = async (planDetails) => {
 };
 
 // ✅ Plan definitions
-
-// ✅ Get Plan Details Helper
-export const getPlanDetails = async (planName, userType) => {
-  let plan = await Plan.findOne({ name: planName, userType }).lean();
-  if (!plan) {
-    // Fallback to free plan
-    plan = await Plan.findOne({ name: "free", userType }).lean();
-  }
-  return plan;
+const PLANS = {
+  // Worker plans
+  free_service: {
+    name: "free", displayName: "Free", price: 0, durationDays: 0,
+    userType: "society service",
+    features: ["Business Profile Listing"],
+    limits: { needsPerMonth: 5, templatesAllowed: 0, tatkalEnabled: false, priorityListing: false, verifiedBadge: false, featuredInTatkal: false, analyticsEnabled: false, whatsappLeads: false }
+  },
+  starter: {
+    name: "starter", displayName: "Starter", price: 49, durationDays: 30,
+    userType: "society service",
+    features: ["Business Profile Listing", "Contact Visibility", "Basic Search Presence", "1 Custom Service Template"],
+    limits: { needsPerMonth: -1, templatesAllowed: 1, tatkalEnabled: false, priorityListing: false, verifiedBadge: false, featuredInTatkal: false, analyticsEnabled: false, whatsappLeads: false }
+  },
+  basic: {
+    name: "basic", displayName: "Basic", price: 99, durationDays: 30,
+    userType: "society service",
+    features: ["Business Profile Listing", "Contact Visibility", "Basic Search Presence", "Unlimited Needs View", "Tatkal ON/OFF", "3 Service Templates"],
+    limits: { needsPerMonth: -1, templatesAllowed: 3, tatkalEnabled: true, priorityListing: false, verifiedBadge: false, featuredInTatkal: false, analyticsEnabled: false, whatsappLeads: false }
+  },
+  pro: {
+    name: "pro", displayName: "Pro", price: 199, durationDays: 30,
+    userType: "society service",
+    features: ["Business Profile Listing", "Contact Visibility", "Priority Listing", "Verified Badge", "Unlimited Needs View", "Tatkal ON/OFF", "5 Service Templates"],
+    limits: { needsPerMonth: -1, templatesAllowed: 5, tatkalEnabled: true, priorityListing: true, verifiedBadge: true, featuredInTatkal: false, analyticsEnabled: false, whatsappLeads: false }
+  },
+  premium: {
+    name: "premium", displayName: "Premium", price: 499, durationDays: 30,
+    userType: "society service",
+    features: ["Business Profile Listing", "Contact Visibility", "Top Priority Listing", "Featured Business Tag", "Verified Badge", "Unlimited Needs View", "Tatkal ON/OFF", "Unlimited Service Templates", "Visibility Boost", "Priority Support"],
+    limits: { needsPerMonth: -1, templatesAllowed: -1, tatkalEnabled: true, priorityListing: true, verifiedBadge: true, featuredInTatkal: true, analyticsEnabled: true, whatsappLeads: true }
+  },
+  // Member plans
+  free_member: {
+    name: "free", displayName: "Free", price: 0, durationDays: 0,
+    userType: "society member",
+    features: ["Post 3 needs/month", "Basic worker search"],
+    limits: { needsPerMonth: 3, directWorkerContact: false }
+  },
+  plus: {
+    name: "plus", displayName: "Plus", price: 49, durationDays: 30,
+    userType: "society member",
+    features: ["Unlimited needs posting", "Priority response", "Direct worker contact"],
+    limits: { needsPerMonth: -1, directWorkerContact: true }
+  },
 };
 
 // ✅ Get all plans for a user type
@@ -62,7 +97,7 @@ export const getPlans = async (req, res) => {
     const { userType } = req.query;
     if (!userType) return res.status(400).json({ message: "userType required" });
 
-    const plans = await Plan.find({ userType, isActive: true }).lean();
+    const plans = Object.values(PLANS).filter(p => p.userType === userType);
     return res.json({ plans });
   } catch (err) {
     return res.status(500).json({ message: "Server error" });
@@ -107,7 +142,10 @@ export const getMySubscription = async (req, res) => {
     }
 
     // Get plan details
-    const planDetails = await getPlanDetails(subscription.plan, subscription.userType);
+    const planKey = subscription.plan === "free"
+      ? (subscription.userType === "society service" ? "free_service" : "free_member")
+      : subscription.plan;
+    const planDetails = PLANS[planKey] || PLANS["free_service"];
 
     return res.json({ subscription, planDetails });
   } catch (err) {
@@ -129,7 +167,10 @@ export const upgradeSubscription = async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     // Validate plan for user type
-    const planDetails = await getPlanDetails(plan, user.role);
+    const planKey = plan === "free"
+      ? (user.role === "society service" ? "free_service" : "free_member")
+      : plan;
+    const planDetails = PLANS[planKey];
     if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
     if (planDetails.userType !== user.role) return res.status(400).json({ message: "Plan not available for your role" });
 
@@ -171,7 +212,8 @@ export const checkNeedLimit = async (req, res) => {
     const subscription = await Subscription.findOne({ user: userId, status: "active" }).lean();
     if (!subscription) return res.json({ canPost: true, remaining: 3 });
 
-    const planDetails = await getPlanDetails(subscription.plan, subscription.userType);
+    const planKey = subscription.plan === "free" ? "free_member" : subscription.plan;
+    const planDetails = PLANS[planKey];
     const limit = planDetails?.limits?.needsPerMonth ?? 3;
 
     if (limit === -1) return res.json({ canPost: true, remaining: -1 });
@@ -228,7 +270,10 @@ export const createOrder = async (req, res) => {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const planDetails = await getPlanDetails(plan, user.role);
+    const planKey = plan === "free"
+      ? (user.role === "society service" ? "free_service" : "free_member")
+      : plan;
+    const planDetails = PLANS[planKey];
     if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
     if (planDetails.userType !== user.role) return res.status(400).json({ message: "Plan not available for your role" });
     if (planDetails.price === 0) return res.status(400).json({ message: "This plan is free, no payment required" });
@@ -288,7 +333,7 @@ export const verifyPayment = async (req, res) => {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const planDetails = await getPlanDetails(plan, user.role);
+    const planDetails = PLANS[plan];
     if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
 
     // Cancel existing active subscriptions
@@ -332,7 +377,10 @@ export const createSubscription = async (req, res) => {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const planDetails = await getPlanDetails(plan, user.role);
+    const planKey = plan === "free"
+      ? (user.role === "society service" ? "free_service" : "free_member")
+      : plan;
+    const planDetails = PLANS[planKey];
     if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
     if (planDetails.userType !== user.role) return res.status(400).json({ message: "Plan not available for your role" });
     if (planDetails.price === 0) return res.status(400).json({ message: "This plan is free, no payment required" });
@@ -373,7 +421,10 @@ export const createQRCode = async (req, res) => {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const planDetails = await getPlanDetails(plan, user.role);
+    const planKey = plan === "free"
+      ? (user.role === "society service" ? "free_service" : "free_member")
+      : plan;
+    const planDetails = PLANS[planKey];
     if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
     if (planDetails.userType !== user.role) return res.status(400).json({ message: "Plan not available for your role" });
     if (planDetails.price === 0) return res.status(400).json({ message: "This plan is free, no payment required" });
@@ -428,7 +479,7 @@ export const verifyQRCodePayment = async (req, res) => {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const planDetails = await getPlanDetails(plan, user.role);
+    const planDetails = PLANS[plan];
     if (!planDetails) return res.status(400).json({ message: "Invalid plan" });
 
     const expectedAmount = planDetails.price * 100; // in paise
@@ -564,4 +615,4 @@ export const deleteAdminSubscription = async (req, res) => {
   }
 };
 
-
+export { PLANS };

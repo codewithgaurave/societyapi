@@ -6,7 +6,6 @@ const planSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      enum: ["free", "basic", "pro", "premium", "plus"],
     },
     displayName: { type: String, required: true },
     userType: {

@@ -2,7 +2,7 @@
 import ServiceTemplate from "../models/ServiceTemplate.js";
 import User from "../models/User.js";
 import Subscription from "../models/Subscription.js";
-import { PLANS } from "./subscriptionController.js";
+import { getPlanDetails } from "./subscriptionController.js";
 
 // ✅ Create template (society service user)
 export const createServiceTemplate = async (req, res) => {

@@ -5,7 +5,7 @@ import axios from "axios";
 import User from "../models/User.js";
 import Subscription from "../models/Subscription.js";
 import Need from "../models/Need.js";
-import { PLANS } from "./subscriptionController.js";
+import { getPlanDetails } from "./subscriptionController.js";
 
 // ✅ NEW imports for combined details
 import Availability from "../models/Availability.js";
@@ -465,10 +465,7 @@ export const setMyTatkalStatus = async (req, res) => {
 
     // Enforce Tatkal eligibility check
     const subscription = await Subscription.findOne({ user: userId, status: "active" }).lean();
-    const planKey = (subscription?.plan === "free" || !subscription)
-      ? "free_service"
-      : subscription.plan;
-    const planDetails = PLANS[planKey] || PLANS["free_service"];
+    const planDetails = await getPlanDetails(subscription?.plan || "free", "society service");
     if (!planDetails?.limits?.tatkalEnabled) {
       return res.status(403).json({
         message: `Tatkal toggle is not allowed on your current plan (${planDetails.displayName}). Please upgrade to Basic or above.`,
