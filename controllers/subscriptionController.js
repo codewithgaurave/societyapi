@@ -532,4 +532,87 @@ export const verifyQRCodePayment = async (req, res) => {
   }
 };
 
+// ✅ Admin: Create Subscription
+export const createAdminSubscription = async (req, res) => {
+  try {
+    if (!req.user?.adminId) return res.status(403).json({ message: "Admins only" });
+    const { user, plan, userType, status, startDate, endDate, price } = req.body;
+    
+    if (!user || !plan || !userType) {
+      return res.status(400).json({ message: "user, plan, and userType are required" });
+    }
+
+    const subscription = await Subscription.create({
+      user,
+      plan,
+      userType,
+      status: status || "active",
+      startDate: startDate || new Date(),
+      endDate: endDate || null,
+      price: price || 0,
+    });
+    
+    // Cancel other active subscriptions for this user if we are creating an active one
+    if (subscription.status === "active") {
+      await Subscription.updateMany({ user, _id: { $ne: subscription._id }, status: "active" }, { status: "cancelled" });
+    }
+    
+    return res.status(201).json({ message: "Subscription created successfully", subscription });
+  } catch (err) {
+    console.error("createAdminSubscription error:", err);
+    return res.status(500).json({ message: "Server error", detail: err.message });
+  }
+};
+
+// ✅ Admin: Edit Subscription
+export const editAdminSubscription = async (req, res) => {
+  try {
+    if (!req.user?.adminId) return res.status(403).json({ message: "Admins only" });
+    const { id } = req.params;
+    const { plan, userType, status, startDate, endDate, price } = req.body;
+    
+    const subscription = await Subscription.findById(id);
+    if (!subscription) {
+      return res.status(404).json({ message: "Subscription not found" });
+    }
+    
+    if (plan) subscription.plan = plan;
+    if (userType) subscription.userType = userType;
+    if (status) subscription.status = status;
+    if (startDate) subscription.startDate = startDate;
+    if (endDate !== undefined) subscription.endDate = endDate;
+    if (price !== undefined) subscription.price = price;
+    
+    await subscription.save();
+    
+    // If made active, cancel others
+    if (subscription.status === "active") {
+      await Subscription.updateMany({ user: subscription.user, _id: { $ne: subscription._id }, status: "active" }, { status: "cancelled" });
+    }
+    
+    return res.json({ message: "Subscription updated successfully", subscription });
+  } catch (err) {
+    console.error("editAdminSubscription error:", err);
+    return res.status(500).json({ message: "Server error", detail: err.message });
+  }
+};
+
+// ✅ Admin: Delete Subscription
+export const deleteAdminSubscription = async (req, res) => {
+  try {
+    if (!req.user?.adminId) return res.status(403).json({ message: "Admins only" });
+    const { id } = req.params;
+    
+    const subscription = await Subscription.findByIdAndDelete(id);
+    if (!subscription) {
+      return res.status(404).json({ message: "Subscription not found" });
+    }
+    
+    return res.json({ message: "Subscription deleted successfully" });
+  } catch (err) {
+    console.error("deleteAdminSubscription error:", err);
+    return res.status(500).json({ message: "Server error", detail: err.message });
+  }
+};
+
 export { PLANS };

@@ -11,6 +11,9 @@ import {
   createSubscription,
   createQRCode,
   verifyQRCodePayment,
+  createAdminSubscription,
+  editAdminSubscription,
+  deleteAdminSubscription,
 } from "../controllers/subscriptionController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { authenticateAdmin } from "../middleware/adminAuth.js";
@@ -32,5 +35,8 @@ router.post("/verify-qr-payment", requireAuth, verifyQRCodePayment);
 
 // Admin only
 router.get("/all", authenticateAdmin, getAllSubscriptions);
+router.post("/add", authenticateAdmin, createAdminSubscription);
+router.put("/:id", authenticateAdmin, editAdminSubscription);
+router.delete("/:id", authenticateAdmin, deleteAdminSubscription);
 
 export default router;
