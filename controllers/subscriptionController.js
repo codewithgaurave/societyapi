@@ -250,7 +250,7 @@ export const incrementNeedCount = async (userId) => {
 // ✅ Admin: get all subscriptions
 export const getAllSubscriptions = async (req, res) => {
   try {
-    if (!req.user?.adminId) return res.status(403).json({ message: "Admins only" });
+    if (!req.admin) return res.status(403).json({ message: "Admins only" });
     const subs = await Subscription.find({}).populate("user", "fullName mobileNumber role").lean();
     return res.json({ subscriptions: subs });
   } catch (err) {
@@ -535,7 +535,7 @@ export const verifyQRCodePayment = async (req, res) => {
 // ✅ Admin: Create Subscription
 export const createAdminSubscription = async (req, res) => {
   try {
-    if (!req.user?.adminId) return res.status(403).json({ message: "Admins only" });
+    if (!req.admin) return res.status(403).json({ message: "Admins only" });
     const { user, plan, userType, status, startDate, endDate, price } = req.body;
     
     if (!user || !plan || !userType) {
@@ -567,7 +567,7 @@ export const createAdminSubscription = async (req, res) => {
 // ✅ Admin: Edit Subscription
 export const editAdminSubscription = async (req, res) => {
   try {
-    if (!req.user?.adminId) return res.status(403).json({ message: "Admins only" });
+    if (!req.admin) return res.status(403).json({ message: "Admins only" });
     const { id } = req.params;
     const { plan, userType, status, startDate, endDate, price } = req.body;
     
@@ -600,7 +600,7 @@ export const editAdminSubscription = async (req, res) => {
 // ✅ Admin: Delete Subscription
 export const deleteAdminSubscription = async (req, res) => {
   try {
-    if (!req.user?.adminId) return res.status(403).json({ message: "Admins only" });
+    if (!req.admin) return res.status(403).json({ message: "Admins only" });
     const { id } = req.params;
     
     const subscription = await Subscription.findByIdAndDelete(id);
