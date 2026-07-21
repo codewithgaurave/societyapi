@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import axios from "axios";
 import User from "../models/User.js";
+import Employee from "../models/Employee.js";
 import Subscription from "../models/Subscription.js";
 import Need from "../models/Need.js";
 import { getPlanDetails } from "./subscriptionController.js";
@@ -50,7 +51,29 @@ export const registerUser = async (req, res) => {
       otherCharges,
       lat, // ✅ Add lat
       lng, // ✅ Add lng
+      empCode, // ✅ Employee Code
+      employeeCode, // alternative field name
     } = req.body;
+
+    const codeToVerify = (empCode || employeeCode)?.trim();
+    let matchedEmpCode = null;
+    let onboardedBy = null;
+
+    if (codeToVerify) {
+      const employeeObj = await Employee.findOne({
+        empCode: codeToVerify.toUpperCase(),
+        isActive: true,
+      });
+
+      if (!employeeObj) {
+        return res.status(400).json({
+          message: `Invalid or inactive Employee Code '${codeToVerify}'`,
+        });
+      }
+
+      matchedEmpCode = employeeObj.empCode;
+      onboardedBy = employeeObj._id;
+    }
 
     if (!fullName || !mobileNumber || !password || !address || !pincode || !role) {
       return res.status(400).json({
@@ -177,6 +200,8 @@ export const registerUser = async (req, res) => {
       otherCharges,
       location: locationData,
       fullAddress: fullAddressData,
+      empCode: matchedEmpCode,
+      onboardedBy: onboardedBy,
       // city: cityData,
       // state: stateData,
     });
@@ -822,7 +847,11 @@ export const listUsers = async (req, res) => {
       return res.status(403).json({ message: "Admins only" });
     }
 
-    const users = await User.find({}, "-password").lean();
+    const users = await User.find({}, "-password")
+      .populate("serviceCategory", "name")
+      .populate("onboardedBy", "empCode name mobileNumber designation")
+      .sort({ createdAt: -1 })
+      .lean();
     return res.json({ users });
   } catch (err) {
     console.error("listUsers error:", err);

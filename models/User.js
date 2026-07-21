@@ -103,6 +103,20 @@ const userSchema = new mongoose.Schema(
       type: String,
     },
 
+    // Employee onboarding fields
+    empCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: null,
+      index: true,
+    },
+    onboardedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null,
+    },
+
     // IST timestamps
     createdAtIST: { type: String },
     updatedAtIST: { type: String },
