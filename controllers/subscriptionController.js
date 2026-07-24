@@ -172,7 +172,7 @@ export const checkNeedLimit = async (req, res) => {
     if (!subscription) return res.json({ canPost: true, remaining: 3 });
 
     const planDetails = await getPlanDetails(subscription.plan, subscription.userType);
-    const limit = planDetails?.limits?.needsPerMonth ?? 3;
+    const limit = planDetails?.limits?.maxNeedsPerMonth ?? 3;
 
     if (limit === -1) return res.json({ canPost: true, remaining: -1 });
 

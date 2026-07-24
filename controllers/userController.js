@@ -852,7 +852,19 @@ export const listUsers = async (req, res) => {
       .populate("onboardedBy", "empCode name mobileNumber designation")
       .sort({ createdAt: -1 })
       .lean();
-    return res.json({ users });
+
+    const activeSubs = await Subscription.find({ status: "active" }).lean();
+    const subMap = {};
+    activeSubs.forEach(sub => {
+      subMap[sub.user.toString()] = sub.plan;
+    });
+
+    const usersWithPlan = users.map(u => ({
+      ...u,
+      activePlan: subMap[u._id.toString()] || "free"
+    }));
+
+    return res.json({ users: usersWithPlan });
   } catch (err) {
     console.error("listUsers error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -1262,14 +1274,10 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
         .map(av => av.user);
     }
 
-    // Combine and deduplicate users
+    // Combine and deduplicate users (Now strictly only registeredUsers in that pincode)
     const userMap = new Map();
     
     registeredUsers.forEach(user => {
-      userMap.set(user._id.toString(), user);
-    });
-    
-    availableUsers.forEach(user => {
       userMap.set(user._id.toString(), user);
     });
     

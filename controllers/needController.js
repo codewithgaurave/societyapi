@@ -52,6 +52,35 @@ export const createNeed = async (req, res) => {
       }
     }
 
+    // ✅ Enforce Needs Limit
+    const Subscription = (await import("../models/Subscription.js")).default;
+    const Plan = (await import("../models/Plan.js")).default;
+    const sub = await Subscription.findOne({ user: userId, status: "active" });
+    if (sub) {
+      const plan = await Plan.findOne({ name: sub.plan, userType: "society member" });
+      if (plan) {
+        const limit = plan.limits?.maxNeedsPerMonth ?? 3;
+        if (limit !== -1) {
+          // Reset check
+          const now = new Date();
+          const resetDate = new Date(sub.needsResetDate || now);
+          if (now.getMonth() !== resetDate.getMonth() || now.getFullYear() !== resetDate.getFullYear()) {
+            sub.needsUsedThisMonth = 0;
+            sub.needsResetDate = now;
+          }
+
+          if (sub.needsUsedThisMonth >= limit) {
+            return res.status(403).json({
+              message: `You have reached your limit of ${limit} job posts this month. Please upgrade your plan.`,
+              code: "LIMIT_REACHED"
+            });
+          }
+          sub.needsUsedThisMonth += 1;
+          await sub.save();
+        }
+      }
+    }
+
     const needData = {
       user: userId,
       serviceCategory: serviceCategoryId,
@@ -707,6 +736,118 @@ export const getNeedsByServiceCategoryAndPincode = async (req, res) => {
 
   } catch (err) {
     console.error("getNeedsByServiceCategoryAndPincode error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ Apply to a need
+export const applyToNeed = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { message, price } = req.body;
+    const workerId = req.user?.sub;
+
+    if (!workerId) return res.status(401).json({ message: "Unauthorized" });
+
+    const worker = await User.findById(workerId).lean();
+    if (!worker || worker.role !== "society service") {
+      return res.status(403).json({ message: "Only service providers can apply" });
+    }
+
+    const need = await Need.findById(id);
+    if (!need) return res.status(404).json({ message: "Job not found" });
+
+    // 1️⃣ Enforce Worker Limit (maxAppliesPerMonth)
+    const Subscription = (await import("../models/Subscription.js")).default;
+    const Plan = (await import("../models/Plan.js")).default;
+    
+    const workerSub = await Subscription.findOne({ user: workerId, status: "active" });
+    if (!workerSub) return res.status(403).json({ message: "Active subscription required" });
+
+    const workerPlan = await Plan.findOne({ name: workerSub.plan, userType: "society service" });
+    if (!workerPlan) return res.status(403).json({ message: "Invalid plan" });
+
+    const applyLimit = workerPlan.limits?.maxAppliesPerMonth ?? 0;
+
+    if (applyLimit !== -1) {
+      if (applyLimit === 0) {
+        return res.status(403).json({ 
+          message: "Your current plan does not allow applying to jobs. Please upgrade.",
+          code: "LIMIT_REACHED"
+        });
+      }
+
+      const now = new Date();
+      const resetDate = new Date(workerSub.needsResetDate || now);
+      if (now.getMonth() !== resetDate.getMonth() || now.getFullYear() !== resetDate.getFullYear()) {
+        workerSub.appliesUsedThisMonth = 0;
+        workerSub.needsResetDate = now;
+      }
+
+      if (workerSub.appliesUsedThisMonth >= applyLimit) {
+        return res.status(403).json({
+          message: `You have reached your limit of ${applyLimit} applications this month. Please upgrade your plan.`,
+          code: "LIMIT_REACHED"
+        });
+      }
+    }
+
+    // 2️⃣ Enforce Job Limit (maxApplicationsPerNeed) based on the Member's plan
+    const memberSub = await Subscription.findOne({ user: need.user, status: "active" });
+    if (memberSub) {
+      const memberPlan = await Plan.findOne({ name: memberSub.plan, userType: "society member" });
+      if (memberPlan) {
+        const jobLimit = memberPlan.limits?.maxApplicationsPerNeed ?? 5;
+        if (jobLimit !== -1 && need.applications.length >= jobLimit) {
+          return res.status(403).json({ 
+            message: "This job has reached its maximum number of applications allowed by the poster's plan.",
+            code: "JOB_FULL"
+          });
+        }
+      }
+    }
+
+    // 3️⃣ Check if already applied
+    const alreadyApplied = need.applications.some(a => a.worker.toString() === workerId);
+    if (alreadyApplied) {
+      return res.status(400).json({ message: "You have already applied to this job." });
+    }
+
+    // 4️⃣ Save application
+    need.applications.push({
+      worker: workerId,
+      message,
+      price: price || 0,
+      appliedAt: new Date()
+    });
+    
+    await need.save();
+
+    // 5️⃣ Increment worker limit
+    if (applyLimit !== -1) {
+      workerSub.appliesUsedThisMonth += 1;
+      await workerSub.save();
+    }
+
+    // 6️⃣ Notify user (fire & forget)
+    setImmediate(async () => {
+      try {
+        const member = await User.findById(need.user).select("fcmToken").lean();
+        if (member?.fcmToken) {
+          await sendMulticastNotification(
+            [member.fcmToken],
+            "New Application Received!",
+            `${worker.fullName} has applied to your job post.`
+          );
+        }
+      } catch (e) {
+        console.error("Notification error on apply:", e);
+      }
+    });
+
+    return res.json({ message: "Successfully applied to job", need });
+  } catch (err) {
+    console.error("applyToNeed error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };

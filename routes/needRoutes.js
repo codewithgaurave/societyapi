@@ -13,12 +13,12 @@ import {
   closeNeed,
 } from "../controllers/needController.js";
 import { requireAuth } from "../middleware/auth.js";
-import { requireMemberPlan } from "../middleware/requireSubscription.js";
+import { requireActiveSubscription } from "../middleware/requireSubscription.js";
 
 const router = express.Router();
 
-// 🔹 Create need — requires auth + any member plan (free allows 3/month, plus unlimited)
-router.post("/", requireAuth, requireMemberPlan, createNeed);
+// 🔹 Create need — requires auth + any active subscription
+router.post("/", requireAuth, requireActiveSubscription, createNeed);
 
 // 🔹 Get all needs (public)
 router.get("/", getAllNeeds);
@@ -36,6 +36,10 @@ router.get("/:id/details", getNeedWithUserDetails);
 
 // 🔹 Close need (by member who posted it)
 router.patch("/:id/close", requireAuth, closeNeed);
+
+// 🔹 Apply to a need (by provider)
+import { applyToNeed } from "../controllers/needController.js";
+router.post("/:id/apply", requireAuth, requireActiveSubscription, applyToNeed);
 
 // 🔹 Mark need as seen by worker
 router.post("/:id/seen", requireAuth, markNeedAsSeen);

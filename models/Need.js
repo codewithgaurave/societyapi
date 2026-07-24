@@ -61,6 +61,16 @@ const needSchema = new mongoose.Schema(
       },
     ],
 
+    // ✅ Applications from workers
+    applications: [
+      {
+        worker: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        message: { type: String },
+        price: { type: Number },
+        appliedAt: { type: Date, default: Date.now },
+      },
+    ],
+
     // IST timestamps
     createdAtIST: { type: String },
     updatedAtIST: { type: String },

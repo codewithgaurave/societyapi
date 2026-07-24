@@ -41,18 +41,6 @@ export const requireSubscription = (allowedPlans = null) => async (req, res, nex
       });
     }
 
-    // If specific plans required, check
-    if (allowedPlans && allowedPlans.length > 0) {
-      if (!allowedPlans.includes(subscription.plan)) {
-        return res.status(403).json({
-          message: `This feature requires one of these plans: ${allowedPlans.join(", ")}. Your current plan: ${subscription.plan}.`,
-          code: "PLAN_UPGRADE_REQUIRED",
-          currentPlan: subscription.plan,
-          requiredPlans: allowedPlans,
-        });
-      }
-    }
-
     // Attach subscription to request for use in controllers
     req.subscription = subscription;
     next();
@@ -63,20 +51,6 @@ export const requireSubscription = (allowedPlans = null) => async (req, res, nex
 };
 
 /**
- * Shorthand middlewares for common checks
+ * Common middleware to just ensure a valid active subscription is present.
  */
-
-// Society Service: starter or above
-export const requireServicePlan = requireSubscription(["starter", "basic", "pro", "premium"]);
-
-// Society Service: pro or premium only
-export const requireProPlan = requireSubscription(["pro", "premium"]);
-
-// Society Service: premium only
-export const requirePremiumPlan = requireSubscription(["premium"]);
-
-// Society Member: any plan (free or plus)
-export const requireMemberPlan = requireSubscription(["free", "plus"]);
-
-// Society Member: plus only
-export const requirePlusPlan = requireSubscription(["plus"]);
+export const requireActiveSubscription = requireSubscription();

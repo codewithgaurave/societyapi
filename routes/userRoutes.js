@@ -23,7 +23,7 @@ import {
 } from "../controllers/userController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { uploadUserFields } from "../config/cloudinary.js";
-import { requireServicePlan } from "../middleware/requireSubscription.js";
+import { requireActiveSubscription } from "../middleware/requireSubscription.js";
 
 const router = express.Router();
 
@@ -66,7 +66,7 @@ router.put("/me", requireAuth, uploadUserFields, updateMyProfile);
 router.delete("/me", requireAuth, deleteMyAccount);
 
 // 🔹 User: toggle tatkal seva — requires basic+ plan
-router.patch("/me/tatkal", requireAuth, requireServicePlan, setMyTatkalStatus);
+router.patch("/me/tatkal", requireAuth, requireActiveSubscription, setMyTatkalStatus);
 router.post("/me/fcm-token", requireAuth, saveFcmToken);
 
 // 🔹 Admin: list all users

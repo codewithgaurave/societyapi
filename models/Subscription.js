@@ -12,7 +12,6 @@ const subscriptionSchema = new mongoose.Schema(
     plan: {
       type: String,
       required: true,
-      enum: ["free", "basic", "pro", "premium", "plus"],
       default: "free",
     },
     userType: {
@@ -32,6 +31,7 @@ const subscriptionSchema = new mongoose.Schema(
     orderId: { type: String },   // Razorpay order ID
     subscriptionId: { type: String }, // Razorpay subscription ID
     needsUsedThisMonth: { type: Number, default: 0 },
+    appliesUsedThisMonth: { type: Number, default: 0 }, // For workers
     needsResetDate: { type: Date, default: Date.now },
 
     // IST timestamps
@@ -50,9 +50,9 @@ subscriptionSchema.pre("save", function (next) {
 
 // Check if subscription is currently active
 subscriptionSchema.methods.isActive = function () {
-  if (this.plan === "free" || this.plan === "basic") return true; // no expiry
   if (this.status !== "active") return false;
-  if (this.endDate && new Date() > this.endDate) return false;
+  if (!this.endDate) return true; // No expiry (e.g. Free plan)
+  if (new Date() > this.endDate) return false;
   return true;
 };
 
