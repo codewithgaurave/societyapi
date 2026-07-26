@@ -19,6 +19,10 @@ const mainCategorySchema = new mongoose.Schema(
         ref: "ServiceCategory",
       },
     ],
+    icon: {
+      type: String, // Cloudinary URL
+      default: null,
+    },
     isActive: {
       type: Boolean,
       default: true,

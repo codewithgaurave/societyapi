@@ -171,6 +171,29 @@ export const updateMainCategory = async (req, res) => {
   }
 };
 
+// ✅ Upload/Update Main Category Icon
+export const updateMainCategoryIcon = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) {
+      return res.status(400).json({ message: "No icon file uploaded" });
+    }
+    const iconUrl = `${req.protocol}://${req.get("host")}/uploads/category-icons/${req.file.filename}`;
+    const mainCategory = await MainCategory.findByIdAndUpdate(
+      id,
+      { icon: iconUrl },
+      { new: true }
+    ).populate("serviceCategories");
+    if (!mainCategory) {
+      return res.status(404).json({ message: "Main category not found" });
+    }
+    return res.json({ message: "Icon updated successfully", mainCategory });
+  } catch (err) {
+    console.error("updateMainCategoryIcon error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ✅ Soft delete Main Category (isActive = false)
 export const deleteMainCategory = async (req, res) => {
   try {

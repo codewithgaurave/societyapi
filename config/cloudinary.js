@@ -3,8 +3,20 @@ import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import multer from "multer";
 import dotenv from "dotenv";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Ensure uploads/category-icons directory exists
+const categoryIconsDir = path.join(__dirname, "../uploads/category-icons");
+if (!fs.existsSync(categoryIconsDir)) {
+  fs.mkdirSync(categoryIconsDir, { recursive: true });
+}
 
 // Cloudinary env check
 if (
@@ -92,6 +104,34 @@ const templateMulter = multer({
 const uploadTemplateImage = templateMulter.single("templateImage");
 
 // -----------------------------------------------------
+// ✅ CATEGORY ICON UPLOAD — LOCAL DISK STORAGE
+// -----------------------------------------------------
+const categoryIconStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, categoryIconsDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ".png";
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`;
+    cb(null, unique);
+  },
+});
+
+const categoryIconMulter = multer({
+  storage: categoryIconStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files are allowed"), false);
+    }
+  },
+});
+
+const uploadCategoryIcon = categoryIconMulter.single("icon");
+
+// -----------------------------------------------------
 // EXPORTS
 // -----------------------------------------------------
 export {
@@ -99,4 +139,5 @@ export {
   uploadUserFields,
   uploadSliderImage,
   uploadTemplateImage,
+  uploadCategoryIcon,
 };

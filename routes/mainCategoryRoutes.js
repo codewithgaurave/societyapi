@@ -8,8 +8,10 @@ import {
   getMainCategoryByIdAdmin,
   updateMainCategory,
   deleteMainCategory,
+  updateMainCategoryIcon,
 } from "../controllers/mainCategoryController.js";
 import { requireAuth } from "../middleware/auth.js";
+import { uploadCategoryIcon } from "../config/cloudinary.js";
 
 const router = express.Router();
 
@@ -41,5 +43,8 @@ router.put("/:id", requireAuth, updateMainCategory);
 
 // Admin: soft delete main category
 router.delete("/:id", requireAuth, deleteMainCategory);
+
+// Admin: upload/update icon
+router.patch("/:id/icon", requireAuth, uploadCategoryIcon, updateMainCategoryIcon);
 
 export default router;

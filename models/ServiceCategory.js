@@ -12,6 +12,10 @@ const serviceCategorySchema = new mongoose.Schema(
     description: {
       type: String,
     },
+    icon: {
+      type: String, // Cloudinary URL
+      default: null,
+    },
     isActive: {
       type: Boolean,
       default: true,

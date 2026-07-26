@@ -81,6 +81,29 @@ export const updateServiceCategory = async (req, res) => {
   }
 };
 
+// Upload/Update Service Category Icon
+export const updateServiceCategoryIcon = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) {
+      return res.status(400).json({ message: "No icon file uploaded" });
+    }
+    const iconUrl = `${req.protocol}://${req.get("host")}/uploads/category-icons/${req.file.filename}`;
+    const category = await ServiceCategory.findByIdAndUpdate(
+      id,
+      { icon: iconUrl },
+      { new: true }
+    );
+    if (!category) {
+      return res.status(404).json({ message: "Service category not found" });
+    }
+    return res.json({ message: "Icon updated successfully", category });
+  } catch (err) {
+    console.error("updateServiceCategoryIcon error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // Soft delete (isActive = false)
 export const deleteServiceCategory = async (req, res) => {
   try {
