@@ -855,13 +855,16 @@ export const listUsers = async (req, res) => {
 
     const activeSubs = await Subscription.find({ status: "active" }).lean();
     const subMap = {};
+    const expiryMap = {};
     activeSubs.forEach(sub => {
       subMap[sub.user.toString()] = sub.plan;
+      expiryMap[sub.user.toString()] = sub.endDate;
     });
 
     const usersWithPlan = users.map(u => ({
       ...u,
-      activePlan: subMap[u._id.toString()] || "free"
+      activePlan: subMap[u._id.toString()] || "free",
+      planExpiryDate: expiryMap[u._id.toString()] || null
     }));
 
     return res.json({ users: usersWithPlan });
