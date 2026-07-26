@@ -1,6 +1,7 @@
 // controllers/employeeController.js
 import Employee from "../models/Employee.js";
 import User from "../models/User.js";
+import Subscription from "../models/Subscription.js";
 
 // Helper to generate employee code if not provided
 const generateEmpCode = async () => {
@@ -299,15 +300,29 @@ export const getEmployeeOnboardingsReport = async (req, res) => {
     const users = await User.find(filter)
       .populate("onboardedBy", "empCode name mobileNumber designation")
       .select(
-        "fullName mobileNumber whatsappNumber email registrationID role profileImage address city state pincode empCode onboardedBy createdAtIST"
+        "fullName mobileNumber whatsappNumber email registrationID role profileImage address city state pincode empCode onboardedBy createdAtIST createdAt"
       )
       .sort({ createdAt: -1 })
       .lean();
 
+    const activeSubs = await Subscription.find({ status: "active" }).lean();
+    const subMap = {};
+    const expiryMap = {};
+    activeSubs.forEach(sub => {
+      subMap[sub.user.toString()] = sub.plan;
+      expiryMap[sub.user.toString()] = sub.endDate;
+    });
+
+    const usersWithPlan = users.map(u => ({
+      ...u,
+      activePlan: subMap[u._id.toString()] || "free",
+      planExpiryDate: expiryMap[u._id.toString()] || null
+    }));
+
     return res.status(200).json({
       success: true,
-      count: users.length,
-      data: users,
+      count: usersWithPlan.length,
+      data: usersWithPlan,
     });
   } catch (error) {
     console.error("Error fetching onboarding report:", error);
