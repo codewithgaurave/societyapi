@@ -34,17 +34,14 @@ export const createServiceTemplate = async (req, res) => {
 
     // Enforce template creation limits
     const subscription = await Subscription.findOne({ user: userId, status: "active" }).lean();
-    const planKey = (subscription?.plan === "free" || !subscription)
-      ? "free_service"
-      : subscription.plan;
-    const planDetails = PLANS[planKey] || PLANS["free_service"];
+    const planDetails = await getPlanDetails(subscription?.plan || "free", user.role);
     const limit = planDetails?.limits?.templatesAllowed ?? 0;
 
     if (limit !== -1) {
       const activeCount = await ServiceTemplate.countDocuments({ user: userId });
       if (activeCount >= limit) {
         return res.status(403).json({
-          message: `Template creation limit reached. Your current plan (${planDetails.displayName}) allows only ${limit} templates. Please upgrade your plan.`,
+          message: `Template creation limit reached. Your current plan (${planDetails?.displayName || "Free"}) allows only ${limit} templates. Please upgrade your plan.`,
           code: "TEMPLATE_LIMIT_EXCEEDED",
         });
       }
