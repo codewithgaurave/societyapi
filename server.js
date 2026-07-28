@@ -28,6 +28,7 @@ import mainCategoryRoutes from "./routes/mainCategoryRoutes.js";
 import appVersionRoutes from "./routes/appVersionRoutes.js";
 import planRoutes from "./routes/planRoutes.js"; 
 import employeeRoutes from "./routes/employeeRoutes.js";
+import communityRoutes from "./routes/communityRoutes.js";
 
 const app = express();
 
@@ -78,6 +79,7 @@ app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/plans", planRoutes); 
 app.use("/api/app-version", appVersionRoutes);
 app.use("/api/employees", employeeRoutes);
+app.use("/api/community", communityRoutes);
 
 // Health / root
 app.get("/", (_req, res) => res.send("✅ API is running..."));

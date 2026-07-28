@@ -18,6 +18,12 @@ if (!fs.existsSync(categoryIconsDir)) {
   fs.mkdirSync(categoryIconsDir, { recursive: true });
 }
 
+// Ensure uploads/community directory exists
+const communityDir = path.join(__dirname, "../uploads/community");
+if (!fs.existsSync(communityDir)) {
+  fs.mkdirSync(communityDir, { recursive: true });
+}
+
 // Cloudinary env check
 if (
   !process.env.CLOUDINARY_CLOUD_NAME ||
@@ -132,6 +138,28 @@ const categoryIconMulter = multer({
 const uploadCategoryIcon = categoryIconMulter.single("icon");
 
 // -----------------------------------------------------
+// ✅ COMMUNITY POST IMAGES — LOCAL DISK STORAGE
+// -----------------------------------------------------
+const communityStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, communityDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
+    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
+  },
+});
+
+const communityMulter = multer({
+  storage: communityStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Only image files allowed"), false);
+  },
+});
+
+const uploadCommunityImages = communityMulter.array("images", 5); // max 5 images
+
+// -----------------------------------------------------
 // EXPORTS
 // -----------------------------------------------------
 export {
@@ -140,4 +168,5 @@ export {
   uploadSliderImage,
   uploadTemplateImage,
   uploadCategoryIcon,
+  uploadCommunityImages,
 };
