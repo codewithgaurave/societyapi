@@ -8,6 +8,7 @@ import {
   getMyAvailability,
   getAvailabilityByUserId,
   getAvailabilityById,
+  adminToggleUserAvailability,
 } from "../controllers/availabilityController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requireActiveSubscription } from "../middleware/requireSubscription.js";
@@ -34,5 +35,8 @@ router.put("/:id", requireAuth, requireActiveSubscription, updateAvailability);
 
 // 🔹 Delete availability — requires basic+ plan
 router.delete("/:id", requireAuth, requireActiveSubscription, deleteAvailability);
+
+// 🔹 Admin toggle worker availability
+router.patch("/admin/toggle/:userId", requireAuth, adminToggleUserAvailability);
 
 export default router;

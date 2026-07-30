@@ -462,3 +462,45 @@ export const getAvailabilityById = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+// ✅ Admin Toggle User Availability
+// PATCH /api/availability/admin/toggle/:userId
+export const adminToggleUserAvailability = async (req, res) => {
+  try {
+    if (!req.user || !req.user.adminId) {
+      return res.status(403).json({ message: "Admins only" });
+    }
+
+    const { userId } = req.params;
+    const { isAvailable } = req.body;
+
+    let availability = await Availability.findOne({ user: userId });
+
+    if (!availability) {
+      const user = await User.findById(userId).lean();
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      availability = await Availability.create({
+        user: userId,
+        availabilityType: "always",
+        startTime: "09:00",
+        endTime: "21:00",
+        isAvailable: isAvailable === undefined ? true : !!isAvailable,
+        colonies: [],
+        pincode: user.pincode,
+        address: user.address,
+      });
+    } else {
+      await Availability.updateMany({ user: userId }, { $set: { isAvailable: isAvailable === undefined ? true : !!isAvailable } });
+      availability.isAvailable = isAvailable === undefined ? true : !!isAvailable;
+    }
+
+    return res.json({
+      message: "Availability updated successfully",
+      isAvailable: availability.isAvailable,
+    });
+  } catch (err) {
+    console.error("adminToggleUserAvailability error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};

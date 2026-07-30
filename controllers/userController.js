@@ -861,10 +861,21 @@ export const listUsers = async (req, res) => {
       expiryMap[sub.user.toString()] = sub.endDate;
     });
 
+    const availabilities = await Availability.find({}).lean();
+    const availabilityMap = {};
+    availabilities.forEach(av => {
+      if (av.isAvailable) {
+        availabilityMap[av.user.toString()] = true;
+      } else if (availabilityMap[av.user.toString()] === undefined) {
+        availabilityMap[av.user.toString()] = false;
+      }
+    });
+
     const usersWithPlan = users.map(u => ({
       ...u,
       activePlan: subMap[u._id.toString()] || "free",
-      planExpiryDate: expiryMap[u._id.toString()] || null
+      planExpiryDate: expiryMap[u._id.toString()] || null,
+      isAvailable: availabilityMap[u._id.toString()] !== undefined ? availabilityMap[u._id.toString()] : true
     }));
 
     return res.json({ users: usersWithPlan });
@@ -1277,11 +1288,17 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
         .map(av => av.user);
     }
 
-    // Combine and deduplicate users (Now strictly only registeredUsers in that pincode)
+    // Combine and deduplicate users (registeredUsers + availableUsers)
     const userMap = new Map();
     
     registeredUsers.forEach(user => {
       userMap.set(user._id.toString(), user);
+    });
+
+    availableUsers.forEach(user => {
+      if (user) {
+        userMap.set(user._id.toString(), user);
+      }
     });
     
     const allUsers = Array.from(userMap.values());

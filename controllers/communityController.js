@@ -32,6 +32,7 @@ export const createPost = async (req, res) => {
       title: title.trim(),
       description: description.trim(),
       images,
+      location: user.location || { type: "Point", coordinates: [0, 0] },
     });
 
     await post.populate("author", "fullName profileImage pincode");
@@ -78,7 +79,7 @@ export const createPost = async (req, res) => {
   }
 };
 
-// ✅ Get Posts — only same pincode (society feed)
+// ✅ Get Posts — within 5km radius (society feed)
 export const getPosts = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -88,8 +89,29 @@ export const getPosts = async (req, res) => {
     const { type, page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const filter = { pincode: user.pincode, isActive: true };
+    const filter = { isActive: true };
     if (type && type !== "all") filter.type = type;
+
+    // Check if user has coordinates set and they are not [0, 0]
+    const hasCoordinates = user.location?.coordinates && 
+      Array.isArray(user.location.coordinates) && 
+      user.location.coordinates.length === 2 && 
+      (user.location.coordinates[0] !== 0 || user.location.coordinates[1] !== 0);
+
+    if (hasCoordinates) {
+      // 5km radius in radians = 5 / 6378.1
+      filter.location = {
+        $geoWithin: {
+          $centerSphere: [
+            user.location.coordinates,
+            5 / 6378.1
+          ]
+        }
+      };
+    } else {
+      // Fallback to pincode filter
+      filter.pincode = user.pincode;
+    }
 
     const posts = await CommunityPost.find(filter)
       .sort({ createdAt: -1 })

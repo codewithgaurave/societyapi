@@ -50,11 +50,27 @@ const communityPostSchema = new mongoose.Schema(
 
     isActive: { type: Boolean, default: true },
 
+    // Location coordinates [longitude, latitude] for geospatial 5km radius query
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point"
+      },
+      coordinates: {
+        type: [Number],
+        default: [0, 0]
+      }
+    },
+
     createdAtIST: { type: String },
     updatedAtIST: { type: String },
   },
   { timestamps: true }
 );
+
+// 2dsphere index for geolocation queries
+communityPostSchema.index({ location: "2dsphere" });
 
 communityPostSchema.pre("save", function (next) {
   const ist = new Date().toLocaleString("en-IN", {
