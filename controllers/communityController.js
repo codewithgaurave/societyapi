@@ -37,15 +37,23 @@ export const createPost = async (req, res) => {
       ? req.files.map((f) => imageUrl(req, f.filename))
       : [];
 
+    const postPincode = targetColony?.pincode 
+      ? Number(targetColony.pincode) 
+      : (user?.pincode ? Number(user.pincode) : 0);
+
+    const postLocation = (user?.location?.coordinates && Array.isArray(user.location.coordinates) && user.location.coordinates.length === 2)
+      ? user.location
+      : { type: "Point", coordinates: [0, 0] };
+
     const post = await CommunityPost.create({
       author: userId,
-      pincode: targetColony?.pincode ? Number(targetColony.pincode) : user.pincode,
+      pincode: postPincode,
       colony: isValidColonyId ? colonyId : null,
       type: type || "post",
       title: title.trim(),
       description: description.trim(),
       images,
-      location: user.location || { type: "Point", coordinates: [0, 0] },
+      location: postLocation,
     });
 
     await post.populate("author", "fullName profileImage pincode");
