@@ -75,7 +75,6 @@ export const createPost = async (req, res) => {
         const typeLabel = typeLabels[type] || "Post";
 
         const filterUser = {
-          _id: { $ne: userId },
           fcmToken: { $exists: true, $ne: null },
         };
 
@@ -125,7 +124,6 @@ export const createPost = async (req, res) => {
         if (!nearbyUsers || nearbyUsers.length === 0) {
           console.log("ℹ️ No specific location tokens found. Falling back to all active FCM users...");
           nearbyUsers = await User.find({
-            _id: { $ne: userId },
             fcmToken: { $exists: true, $ne: null },
           }).select("fcmToken fullName").lean();
         }
