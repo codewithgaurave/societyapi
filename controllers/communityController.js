@@ -1,7 +1,11 @@
 // controllers/communityController.js
+import mongoose from "mongoose";
 import CommunityPost from "../models/CommunityPost.js";
 import User from "../models/User.js";
 import { sendMulticastNotification } from "../services/notificationService.js";
+
+// Helper: robustly extract user ID from req.user payload
+const getUserId = (req) => req.user?._id || req.user?.sub || req.user?.id || req.user?.userId;
 
 // Helper: build public image URL
 const imageUrl = (req, filename) =>
@@ -10,7 +14,9 @@ const imageUrl = (req, filename) =>
 // ✅ Create Post
 export const createPost = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Invalid user token" });
+
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -21,7 +27,8 @@ export const createPost = async (req, res) => {
     }
 
     let targetColony = null;
-    if (colonyId) {
+    const isValidColonyId = colonyId && mongoose.Types.ObjectId.isValid(colonyId);
+    if (isValidColonyId) {
       const Colony = (await import("../models/Colony.js")).default;
       targetColony = await Colony.findById(colonyId).lean();
     }
@@ -33,7 +40,7 @@ export const createPost = async (req, res) => {
     const post = await CommunityPost.create({
       author: userId,
       pincode: targetColony?.pincode ? Number(targetColony.pincode) : user.pincode,
-      colony: colonyId || null,
+      colony: isValidColonyId ? colonyId : null,
       type: type || "post",
       title: title.trim(),
       description: description.trim(),
@@ -56,7 +63,7 @@ export const createPost = async (req, res) => {
           fcmToken: { $ne: null },
         };
 
-        if (colonyId && targetColony) {
+        if (isValidColonyId && targetColony) {
           // Send notification ONLY to members of this society/colony pincode
           filterUser.pincode = Number(targetColony.pincode);
         } else {
@@ -102,7 +109,9 @@ export const createPost = async (req, res) => {
 // ✅ Get Posts — within 5km radius or society filter
 export const getPosts = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Invalid user token" });
+
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -112,7 +121,7 @@ export const getPosts = async (req, res) => {
     const filter = { isActive: true };
     if (type && type !== "all") filter.type = type;
 
-    if (colonyId && colonyId !== "all") {
+    if (colonyId && colonyId !== "all" && mongoose.Types.ObjectId.isValid(colonyId)) {
       filter.colony = colonyId;
     } else {
       const hasCoordinates = user.location?.coordinates && 
@@ -163,7 +172,7 @@ export const getPosts = async (req, res) => {
 // ✅ Get single post
 export const getPostById = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = getUserId(req);
     const post = await CommunityPost.findOne({
       _id: req.params.id,
       isActive: true,
@@ -191,7 +200,7 @@ export const getPostById = async (req, res) => {
 // ✅ Update Post (only author)
 export const updatePost = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = getUserId(req);
     const post = await CommunityPost.findById(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found" });
     if (post.author.toString() !== userId.toString()) {
@@ -216,7 +225,7 @@ export const updatePost = async (req, res) => {
 // ✅ Delete Post (only author)
 export const deletePost = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = getUserId(req);
     const post = await CommunityPost.findById(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found" });
     if (post.author.toString() !== userId.toString()) {
@@ -236,7 +245,7 @@ export const deletePost = async (req, res) => {
 // ✅ Toggle Like
 export const toggleLike = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = getUserId(req);
     const post = await CommunityPost.findById(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
@@ -261,7 +270,7 @@ export const toggleLike = async (req, res) => {
 // ✅ Add Comment
 export const addComment = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = getUserId(req);
     const { text } = req.body;
     if (!text?.trim()) return res.status(400).json({ message: "Comment text required" });
 
@@ -288,7 +297,7 @@ export const addComment = async (req, res) => {
 // ✅ Delete Comment (author of comment or post author)
 export const deleteComment = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = getUserId(req);
     const post = await CommunityPost.findById(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
@@ -315,8 +324,9 @@ export const deleteComment = async (req, res) => {
 // ✅ My Posts
 export const getMyPosts = async (req, res) => {
   try {
+    const userId = getUserId(req);
     const posts = await CommunityPost.find({
-      author: req.user._id,
+      author: userId,
       isActive: true,
     })
       .sort({ createdAt: -1 })
