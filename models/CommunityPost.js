@@ -29,6 +29,14 @@ const communityPostSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Google Maps searched location filter
+    targetAddress: { type: String, default: null },
+    targetPincode: { type: Number, default: null },
+    targetLocation: {
+      type: { type: String, enum: ["Point"], default: "Point" },
+      coordinates: { type: [Number], default: [0, 0] },
+    },
+
     type: {
       type: String,
       enum: ["post", "complaint", "info", "event", "lost_found"],

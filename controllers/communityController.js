@@ -20,7 +20,7 @@ export const createPost = async (req, res) => {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const { type, title, description, colonyId } = req.body;
+    const { type, title, description, colonyId, targetAddress, targetPincode, targetLat, targetLng } = req.body;
 
     if (!title?.trim() || !description?.trim()) {
       return res.status(400).json({ message: "Title and description are required" });
@@ -37,18 +37,27 @@ export const createPost = async (req, res) => {
       ? req.files.map((f) => imageUrl(req, f.filename))
       : [];
 
-    const postPincode = targetColony?.pincode 
-      ? Number(targetColony.pincode) 
-      : (user?.pincode ? Number(user.pincode) : 0);
+    const finalPincode = targetPincode 
+      ? Number(targetPincode) 
+      : (targetColony?.pincode 
+          ? Number(targetColony.pincode) 
+          : (user?.pincode ? Number(user.pincode) : 0));
 
     const postLocation = (user?.location?.coordinates && Array.isArray(user.location.coordinates) && user.location.coordinates.length === 2)
       ? user.location
       : { type: "Point", coordinates: [0, 0] };
 
+    const parsedTargetLocation = (targetLat && targetLng && !isNaN(Number(targetLat)) && !isNaN(Number(targetLng)))
+      ? { type: "Point", coordinates: [Number(targetLng), Number(targetLat)] }
+      : { type: "Point", coordinates: [0, 0] };
+
     const post = await CommunityPost.create({
       author: userId,
-      pincode: postPincode,
+      pincode: finalPincode,
       colony: isValidColonyId ? colonyId : null,
+      targetAddress: targetAddress || null,
+      targetPincode: targetPincode ? Number(targetPincode) : null,
+      targetLocation: parsedTargetLocation,
       type: type || "post",
       title: title.trim(),
       description: description.trim(),
@@ -71,7 +80,28 @@ export const createPost = async (req, res) => {
           fcmToken: { $ne: null },
         };
 
-        if (isValidColonyId && targetColony) {
+        if (targetPincode || (targetLat && targetLng)) {
+          // Send notification to users matching searched Google Places pincode or within 5km of searched coords
+          const conditions = [];
+          if (targetPincode) {
+            conditions.push({ pincode: Number(targetPincode) });
+          }
+          if (targetLat && targetLng && !isNaN(Number(targetLat)) && !isNaN(Number(targetLng))) {
+            conditions.push({
+              location: {
+                $geoWithin: {
+                  $centerSphere: [
+                    [Number(targetLng), Number(targetLat)],
+                    5 / 6378.1, // 5km in radians
+                  ],
+                },
+              },
+            });
+          }
+          if (conditions.length > 0) {
+            filterUser.$or = conditions;
+          }
+        } else if (isValidColonyId && targetColony) {
           // Send notification ONLY to members of this society/colony pincode
           filterUser.pincode = Number(targetColony.pincode);
         } else {
@@ -94,12 +124,12 @@ export const createPost = async (req, res) => {
 
         const tokens = nearbyUsers.map((u) => u.fcmToken).filter(Boolean);
         if (tokens.length) {
-          const societyNameHeader = targetColony ? ` [${targetColony.name}]` : "";
+          const locHeader = targetAddress ? ` [${targetAddress.split(',')[0]}]` : (targetColony ? ` [${targetColony.name}]` : "");
           await sendMulticastNotification(
             tokens,
-            `📢 ${typeLabel}${societyNameHeader}`,
+            `📢 ${typeLabel}${locHeader}`,
             `${post.author.fullName}: ${title.trim()}`,
-            { type: "community_post", postId: post._id.toString(), postType: type, colonyId: colonyId || "" }
+            { type: "community_post", postId: post._id.toString(), postType: type, targetAddress: targetAddress || "" }
           );
         }
       } catch (notifErr) {
