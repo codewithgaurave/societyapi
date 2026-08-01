@@ -20,13 +20,19 @@ export const createPost = async (req, res) => {
       return res.status(400).json({ message: "Title and description are required" });
     }
 
+    let targetColony = null;
+    if (colonyId) {
+      const Colony = (await import("../models/Colony.js")).default;
+      targetColony = await Colony.findById(colonyId).lean();
+    }
+
     const images = req.files
       ? req.files.map((f) => imageUrl(req, f.filename))
       : [];
 
     const post = await CommunityPost.create({
       author: userId,
-      pincode: user.pincode,
+      pincode: targetColony?.pincode ? Number(targetColony.pincode) : user.pincode,
       colony: colonyId || null,
       type: type || "post",
       title: title.trim(),
@@ -36,35 +42,49 @@ export const createPost = async (req, res) => {
     });
 
     await post.populate("author", "fullName profileImage pincode");
+    await post.populate("colony", "name city pincode");
 
-    // Send FCM notification to nearby society members (10km radius)
+    // Send FCM notification to society members
     setImmediate(async () => {
       try {
         const typeLabels = { post: "Post", complaint: "Complaint", info: "Info", event: "Event", lost_found: "Lost & Found" };
         const typeLabel = typeLabels[type] || "Post";
 
-        // Find users within 10km using $geoNear — same society (pincode) OR within 10km
-        const nearbyUsers = await User.find({
+        const filterUser = {
           _id: { $ne: userId },
           role: "society member",
           fcmToken: { $ne: null },
-          location: {
-            $geoWithin: {
-              $centerSphere: [
-                user.location?.coordinates || [0, 0],
-                10 / 6378.1, // 10km in radians
-              ],
-            },
-          },
-        }).select("fcmToken").lean();
+        };
+
+        if (colonyId && targetColony) {
+          // Send notification ONLY to members of this society/colony pincode
+          filterUser.pincode = Number(targetColony.pincode);
+        } else {
+          // Fallback to location radius (10km) or user pincode
+          if (user.location?.coordinates && user.location.coordinates[0] !== 0) {
+            filterUser.location = {
+              $geoWithin: {
+                $centerSphere: [
+                  user.location.coordinates,
+                  10 / 6378.1, // 10km in radians
+                ],
+              },
+            };
+          } else {
+            filterUser.pincode = user.pincode;
+          }
+        }
+
+        const nearbyUsers = await User.find(filterUser).select("fcmToken").lean();
 
         const tokens = nearbyUsers.map((u) => u.fcmToken).filter(Boolean);
         if (tokens.length) {
+          const societyNameHeader = targetColony ? ` [${targetColony.name}]` : "";
           await sendMulticastNotification(
             tokens,
-            `📢 ${typeLabel} in your Society`,
+            `📢 ${typeLabel}${societyNameHeader}`,
             `${post.author.fullName}: ${title.trim()}`,
-            { type: "community_post", postId: post._id.toString(), postType: type }
+            { type: "community_post", postId: post._id.toString(), postType: type, colonyId: colonyId || "" }
           );
         }
       } catch (notifErr) {
@@ -79,38 +99,39 @@ export const createPost = async (req, res) => {
   }
 };
 
-// ✅ Get Posts — within 5km radius (society feed)
+// ✅ Get Posts — within 5km radius or society filter
 export const getPosts = async (req, res) => {
   try {
     const userId = req.user._id;
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const { type, page = 1, limit = 20 } = req.query;
+    const { type, colonyId, page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const filter = { isActive: true };
     if (type && type !== "all") filter.type = type;
 
-    // Check if user has coordinates set and they are not [0, 0]
-    const hasCoordinates = user.location?.coordinates && 
-      Array.isArray(user.location.coordinates) && 
-      user.location.coordinates.length === 2 && 
-      (user.location.coordinates[0] !== 0 || user.location.coordinates[1] !== 0);
-
-    if (hasCoordinates) {
-      // 5km radius in radians = 5 / 6378.1
-      filter.location = {
-        $geoWithin: {
-          $centerSphere: [
-            user.location.coordinates,
-            5 / 6378.1
-          ]
-        }
-      };
+    if (colonyId && colonyId !== "all") {
+      filter.colony = colonyId;
     } else {
-      // Fallback to pincode filter
-      filter.pincode = user.pincode;
+      const hasCoordinates = user.location?.coordinates && 
+        Array.isArray(user.location.coordinates) && 
+        user.location.coordinates.length === 2 && 
+        (user.location.coordinates[0] !== 0 || user.location.coordinates[1] !== 0);
+
+      if (hasCoordinates) {
+        filter.location = {
+          $geoWithin: {
+            $centerSphere: [
+              user.location.coordinates,
+              5 / 6378.1
+            ]
+          }
+        };
+      } else {
+        filter.pincode = user.pincode;
+      }
     }
 
     const posts = await CommunityPost.find(filter)
@@ -118,6 +139,7 @@ export const getPosts = async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit))
       .populate("author", "fullName profileImage")
+      .populate("colony", "name city pincode")
       .populate("comments.user", "fullName profileImage")
       .lean();
 
