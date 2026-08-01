@@ -76,8 +76,7 @@ export const createPost = async (req, res) => {
 
         const filterUser = {
           _id: { $ne: userId },
-          role: "society member",
-          fcmToken: { $ne: null },
+          fcmToken: { $exists: true, $ne: null },
         };
 
         if (targetPincode || (targetLat && targetLng)) {
@@ -115,20 +114,34 @@ export const createPost = async (req, res) => {
                 ],
               },
             };
-          } else {
+          } else if (user.pincode) {
             filterUser.pincode = user.pincode;
           }
         }
 
-        const nearbyUsers = await User.find(filterUser).select("fcmToken").lean();
+        let nearbyUsers = await User.find(filterUser).select("fcmToken fullName").lean();
 
-        const tokens = nearbyUsers.map((u) => u.fcmToken).filter(Boolean);
+        // If targeted search returns 0 tokens, fallback to all users with valid FCM tokens
+        if (!nearbyUsers || nearbyUsers.length === 0) {
+          console.log("ℹ️ No specific location tokens found. Falling back to all active FCM users...");
+          nearbyUsers = await User.find({
+            _id: { $ne: userId },
+            fcmToken: { $exists: true, $ne: null },
+          }).select("fcmToken fullName").lean();
+        }
+
+        const tokens = nearbyUsers
+          .map((u) => u.fcmToken)
+          .filter((t) => t && typeof t === "string" && t.trim().length > 0);
+
+        console.log(`📡 Found ${nearbyUsers.length} target users, ${tokens.length} valid FCM tokens for notification.`);
+
         if (tokens.length) {
           const locHeader = targetAddress ? ` [${targetAddress.split(',')[0]}]` : (targetColony ? ` [${targetColony.name}]` : "");
           await sendMulticastNotification(
             tokens,
             `📢 ${typeLabel}${locHeader}`,
-            `${post.author.fullName}: ${title.trim()}`,
+            `${post.author?.fullName || 'Member'}: ${title.trim()}`,
             { type: "community_post", postId: post._id.toString(), postType: type, targetAddress: targetAddress || "" }
           );
         }
