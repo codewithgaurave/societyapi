@@ -53,6 +53,8 @@ export const registerUser = async (req, res) => {
       lng, // ✅ Add lng
       empCode, // ✅ Employee Code
       employeeCode, // alternative field name
+      colonyId,
+      colony,
     } = req.body;
 
     const codeToVerify = (empCode || employeeCode)?.trim();
@@ -202,6 +204,7 @@ export const registerUser = async (req, res) => {
       fullAddress: fullAddressData,
       empCode: matchedEmpCode,
       onboardedBy: onboardedBy,
+      colony: colonyId || colony || null,
       // city: cityData,
       // state: stateData,
     });
@@ -231,6 +234,7 @@ export const registerUser = async (req, res) => {
         fullAddress: user.fullAddress,
         city: user.city,
         state: user.state,
+        colony: user.colony,
         createdAt: user.createdAt,
       },
       token,
@@ -347,6 +351,7 @@ export const loginUser = async (req, res) => {
         fullAddress: user.fullAddress,
         city: user.city,
         state: user.state,
+        colony: user.colony,
       },
       token,
     });
@@ -653,7 +658,10 @@ export const listTatkalUsers = async (req, res) => {
         .lean();
       
       const availableUserIds = availableUsers.map(av => av.user ? av.user._id.toString() : null).filter(id => id);
-      users = users.filter(user => availableUserIds.includes(user._id.toString()));
+      users = users.filter(user => 
+        availableUserIds.includes(user._id.toString()) ||
+        (colonyId && user.colony && user.colony.toString() === colonyId.toString())
+      );
       console.log(`📅 Availability filtering applied: ${users.length} remain`);
     }
 
@@ -800,7 +808,10 @@ export const listTatkalUsersByPincode = async (req, res) => {
       .lean();
     
     const availableUserIds = availableUsers.map(av => av.user ? av.user._id.toString() : null).filter(id => id);
-    users = users.filter(user => availableUserIds.includes(user._id.toString()));
+    users = users.filter(user => 
+      availableUserIds.includes(user._id.toString()) ||
+      (colonyId && user.colony && user.colony.toString() === colonyId.toString())
+    );
 
     // Filter/mask contact details for free plan workers
     const allUserIds = users.map(u => (u._id || u.id).toString());

@@ -54,7 +54,7 @@ export const createPost = async (req, res) => {
     const post = await CommunityPost.create({
       author: userId,
       pincode: finalPincode,
-      colony: isValidColonyId ? colonyId : null,
+      colony: isValidColonyId ? colonyId : (user.colony || null),
       targetAddress: targetAddress || null,
       targetPincode: targetPincode ? Number(targetPincode) : null,
       targetLocation: parsedTargetLocation,
@@ -78,7 +78,13 @@ export const createPost = async (req, res) => {
           fcmToken: { $exists: true, $ne: null },
         };
 
-        if (targetPincode || (targetLat && targetLng)) {
+        let isColonyTargeted = false;
+
+        if (post.colony) {
+          // Send notification ONLY to members of this specific colony
+          filterUser.colony = post.colony;
+          isColonyTargeted = true;
+        } else if (targetPincode || (targetLat && targetLng)) {
           // Send notification to users matching searched Google Places pincode or within 5km of searched coords
           const conditions = [];
           if (targetPincode) {
@@ -99,12 +105,12 @@ export const createPost = async (req, res) => {
           if (conditions.length > 0) {
             filterUser.$or = conditions;
           }
-        } else if (isValidColonyId && targetColony) {
-          // Send notification ONLY to members of this society/colony pincode
-          filterUser.pincode = Number(targetColony.pincode);
         } else {
-          // Fallback to location radius (10km) or user pincode
-          if (user.location?.coordinates && user.location.coordinates[0] !== 0) {
+          // Fallback to user's registered colony first, then pincode/location
+          if (user.colony) {
+            filterUser.colony = user.colony;
+            isColonyTargeted = true;
+          } else if (user.location?.coordinates && user.location.coordinates[0] !== 0) {
             filterUser.location = {
               $geoWithin: {
                 $centerSphere: [
@@ -120,8 +126,8 @@ export const createPost = async (req, res) => {
 
         let nearbyUsers = await User.find(filterUser).select("fcmToken fullName").lean();
 
-        // If targeted search returns 0 tokens, fallback to all users with valid FCM tokens
-        if (!nearbyUsers || nearbyUsers.length === 0) {
+        // If targeted search returns 0 tokens, fallback to all users ONLY if we did not target a specific colony
+        if ((!nearbyUsers || nearbyUsers.length === 0) && !isColonyTargeted) {
           console.log("ℹ️ No specific location tokens found. Falling back to all active FCM users...");
           nearbyUsers = await User.find({
             fcmToken: { $exists: true, $ne: null },
@@ -172,24 +178,10 @@ export const getPosts = async (req, res) => {
 
     if (colonyId && colonyId !== "all" && mongoose.Types.ObjectId.isValid(colonyId)) {
       filter.colony = colonyId;
+    } else if (user.colony) {
+      filter.colony = user.colony;
     } else {
-      const hasCoordinates = user.location?.coordinates && 
-        Array.isArray(user.location.coordinates) && 
-        user.location.coordinates.length === 2 && 
-        (user.location.coordinates[0] !== 0 || user.location.coordinates[1] !== 0);
-
-      if (hasCoordinates) {
-        filter.location = {
-          $geoWithin: {
-            $centerSphere: [
-              user.location.coordinates,
-              5 / 6378.1
-            ]
-          }
-        };
-      } else {
-        filter.pincode = user.pincode;
-      }
+      filter.pincode = user.pincode;
     }
 
     const posts = await CommunityPost.find(filter)

@@ -102,6 +102,11 @@ const userSchema = new mongoose.Schema(
     state: {
       type: String,
     },
+    colony: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Colony",
+      default: null,
+    },
 
     // Employee onboarding fields
     empCode: {
