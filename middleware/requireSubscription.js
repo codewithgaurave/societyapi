@@ -14,14 +14,25 @@ export const requireSubscription = (allowedPlans = null) => async (req, res, nex
     const userId = req.user?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
+    // ✅ Check if user's serviceCategory is marked as free by admin
+    const User = (await import("../models/User.js")).default;
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.role === "society service" && user.serviceCategory) {
+      const ServiceCategory = (await import("../models/ServiceCategory.js")).default;
+      const cat = await ServiceCategory.findById(user.serviceCategory).lean();
+      if (cat?.isFree) {
+        // Free category — bypass subscription check entirely
+        req.subscription = { plan: "free", status: "active", isFreeCategory: true };
+        return next();
+      }
+    }
+
     let subscription = await Subscription.findOne({ user: userId, status: "active" }).lean();
 
-    // ✅ Auto-assign free subscription if none exists (instead of blocking with 403)
+    // ✅ Auto-assign free subscription if none exists
     if (!subscription) {
-      const User = (await import("../models/User.js")).default;
-      const user = await User.findById(userId).lean();
-      if (!user) return res.status(404).json({ message: "User not found" });
-
       subscription = await Subscription.create({
         user: userId,
         plan: "free",

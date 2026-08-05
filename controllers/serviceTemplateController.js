@@ -32,10 +32,19 @@ export const createServiceTemplate = async (req, res) => {
       });
     }
 
+    // Check if user's service category is free (household services)
+    let isFreeCategory = false;
+    if (user.serviceCategory) {
+      const ServiceCategory = (await import("../models/ServiceCategory.js")).default;
+      const cat = await ServiceCategory.findById(user.serviceCategory).lean();
+      isFreeCategory = cat?.isFree === true;
+    }
+
     // Enforce template creation limits
     const subscription = await Subscription.findOne({ user: userId, status: "active" }).lean();
     const planDetails = await getPlanDetails(subscription?.plan || "free", user.role);
-    const limit = planDetails?.limits?.templatesAllowed ?? 0;
+    // Free category users get 1 template free; others follow plan limit
+    const limit = isFreeCategory ? Math.max(planDetails?.limits?.templatesAllowed ?? 0, 1) : (planDetails?.limits?.templatesAllowed ?? 0);
 
     if (limit !== -1) {
       const activeCount = await ServiceTemplate.countDocuments({ user: userId });

@@ -362,6 +362,60 @@ export const deleteComment = async (req, res) => {
   }
 };
 
+// ✅ Admin: Get all posts (society-wise filter optional)
+export const adminGetPosts = async (req, res) => {
+  try {
+    const { type, colonyId, pincode, page = 1, limit = 20, isActive } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const filter = {};
+    if (isActive !== undefined) filter.isActive = isActive === "true";
+    if (type && type !== "all") filter.type = type;
+    if (colonyId && mongoose.Types.ObjectId.isValid(colonyId)) filter.colony = colonyId;
+    if (pincode) filter.pincode = Number(pincode);
+
+    const posts = await CommunityPost.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .populate("author", "fullName profileImage pincode")
+      .populate("colony", "name city pincode")
+      .lean();
+
+    const total = await CommunityPost.countDocuments(filter);
+    return res.json({ posts, total, page: parseInt(page) });
+  } catch (err) {
+    console.error("adminGetPosts error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ Admin: Toggle post active/inactive
+export const adminTogglePost = async (req, res) => {
+  try {
+    const post = await CommunityPost.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    post.isActive = !post.isActive;
+    await post.save();
+    return res.json({ message: `Post ${post.isActive ? "activated" : "deactivated"}`, isActive: post.isActive });
+  } catch (err) {
+    console.error("adminTogglePost error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ Admin: Hard delete post
+export const adminDeletePost = async (req, res) => {
+  try {
+    const post = await CommunityPost.findByIdAndDelete(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    return res.json({ message: "Post permanently deleted" });
+  } catch (err) {
+    console.error("adminDeletePost error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ✅ My Posts
 export const getMyPosts = async (req, res) => {
   try {

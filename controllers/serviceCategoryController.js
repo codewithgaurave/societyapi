@@ -4,7 +4,7 @@ import ServiceCategory from "../models/ServiceCategory.js";
 // Create category (Admin-only via JWT)
 export const createServiceCategory = async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, isFree } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: "name is required" });
@@ -17,7 +17,7 @@ export const createServiceCategory = async (req, res) => {
         .json({ message: "Service category with this name already exists" });
     }
 
-    const category = await ServiceCategory.create({ name, description });
+    const category = await ServiceCategory.create({ name, description, isFree: isFree === true });
 
     return res.status(201).json({
       message: "Service category created successfully",
@@ -59,11 +59,11 @@ export const getServiceCategoryById = async (req, res) => {
 export const updateServiceCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, isActive } = req.body;
+    const { name, description, isActive, isFree } = req.body;
 
     const category = await ServiceCategory.findByIdAndUpdate(
       id,
-      { name, description, isActive },
+      { name, description, isActive, isFree },
       { new: true, runValidators: true }
     );
 
@@ -100,6 +100,23 @@ export const updateServiceCategoryIcon = async (req, res) => {
     return res.json({ message: "Icon updated successfully", category });
   } catch (err) {
     console.error("updateServiceCategoryIcon error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Admin: Toggle isFree on/off for a category
+export const toggleFreeCategory = async (req, res) => {
+  try {
+    const category = await ServiceCategory.findById(req.params.id);
+    if (!category) return res.status(404).json({ message: "Service category not found" });
+    category.isFree = !category.isFree;
+    await category.save();
+    return res.json({
+      message: `Category "${category.name}" is now ${category.isFree ? 'FREE ✅' : 'PAID 💳'}`,
+      category,
+    });
+  } catch (err) {
+    console.error("toggleFreeCategory error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };

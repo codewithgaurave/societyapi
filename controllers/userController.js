@@ -16,6 +16,22 @@ import ServiceCategory from "../models/ServiceCategory.js";
 
 import { sendMulticastNotification } from "../services/notificationService.js";
 
+// Helper: returns Set of userIds whose serviceCategory.isFree === true
+const getFreeCategoryUserIds = async (userIds) => {
+  const users = await User.find({ _id: { $in: userIds }, role: "society service" }, "serviceCategory").lean();
+  const catIds = [...new Set(users.map(u => u.serviceCategory?.toString()).filter(Boolean))];
+  if (!catIds.length) return new Set();
+  const freeCats = await ServiceCategory.find({ _id: { $in: catIds }, isFree: true }, "_id").lean();
+  const freeCatSet = new Set(freeCats.map(c => c._id.toString()));
+  const freeUserIds = new Set();
+  users.forEach(u => {
+    if (u.serviceCategory && freeCatSet.has(u.serviceCategory.toString())) {
+      freeUserIds.add(u._id.toString());
+    }
+  });
+  return freeUserIds;
+};
+
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.USER_JWT_EXPIRES_IN || "7d";
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || "12", 10);
@@ -677,10 +693,14 @@ export const listTatkalUsers = async (req, res) => {
       subMap.set(sub.user.toString(), sub.plan);
     });
 
+    // Collect free category IDs for contact visibility
+    const freeCatUserIds = await getFreeCategoryUserIds(allUserIds);
+
     const sanitizedUsers = users.map(user => {
       const userIdStr = (user._id || user.id).toString();
       const plan = subMap.get(userIdStr) || "free";
-      if (plan === "free" && user.role === "society service") {
+      const isFreeCategory = freeCatUserIds.has(userIdStr);
+      if (plan === "free" && user.role === "society service" && !isFreeCategory) {
         return {
           ...user,
           mobileNumber: "",
@@ -825,10 +845,13 @@ export const listTatkalUsersByPincode = async (req, res) => {
       subMap.set(sub.user.toString(), sub.plan);
     });
 
+    const freeCatUserIds = await getFreeCategoryUserIds(allUserIds);
+
     const sanitizedUsers = users.map(user => {
       const userIdStr = (user._id || user.id).toString();
       const plan = subMap.get(userIdStr) || "free";
-      if (plan === "free" && user.role === "society service") {
+      const isFreeCategory = freeCatUserIds.has(userIdStr);
+      if (plan === "free" && user.role === "society service" && !isFreeCategory) {
         return {
           ...user,
           mobileNumber: "",
@@ -1126,7 +1149,14 @@ export const getUserDetailsById = async (req, res) => {
     const subscription = await Subscription.findOne({ user: id, status: "active" }).lean();
     const plan = subscription?.plan || "free";
 
-    if (plan === "free" && user.role === "society service") {
+    // Check if user's service category is free (household services)
+    let isFreeCategory = false;
+    if (user.serviceCategory && user.role === "society service") {
+      const cat = await ServiceCategory.findById(user.serviceCategory._id || user.serviceCategory).lean();
+      isFreeCategory = cat?.isFree === true;
+    }
+
+    if (plan === "free" && user.role === "society service" && !isFreeCategory) {
       user.mobileNumber = "";
       user.whatsappNumber = "";
       user.email = "";
@@ -1173,9 +1203,12 @@ export const getAllUsersPublic = async (req, res) => {
       subMap.set(sub.user.toString(), sub.plan);
     });
 
+    const freeCatUserIds = await getFreeCategoryUserIds(allUserIds);
+
     const sanitizedUsers = users.map(user => {
       const plan = subMap.get(user._id.toString()) || "free";
-      if (plan === "free" && user.role === "society service") {
+      const isFreeCategory = freeCatUserIds.has(user._id.toString());
+      if (plan === "free" && user.role === "society service" && !isFreeCategory) {
         return {
           ...user,
           mobileNumber: "",
@@ -1326,9 +1359,13 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
       subMap.set(sub.user.toString(), sub.plan);
     });
 
+    const allUserIdStrs = allUsers.map(u => u._id.toString());
+    const freeCatUserIds = await getFreeCategoryUserIds(allUserIdStrs);
+
     const sanitizedUsers = allUsers.map(user => {
       const plan = subMap.get(user._id.toString()) || "free";
-      if (plan === "free" && user.role === "society service") {
+      const isFreeCategory = freeCatUserIds.has(user._id.toString());
+      if (plan === "free" && user.role === "society service" && !isFreeCategory) {
         return {
           ...user,
           mobileNumber: "",
@@ -1380,9 +1417,12 @@ export const getUsersForMap = async (req, res) => {
       subMap.set(sub.user.toString(), sub.plan);
     });
 
+    const freeCatUserIds = await getFreeCategoryUserIds(allUserIds);
+
     const sanitizedUsers = users.map(user => {
       const plan = subMap.get(user._id.toString()) || "free";
-      if (plan === "free" && user.role === "society service") {
+      const isFreeCategory = freeCatUserIds.has(user._id.toString());
+      if (plan === "free" && user.role === "society service" && !isFreeCategory) {
         return {
           ...user,
           mobileNumber: "",

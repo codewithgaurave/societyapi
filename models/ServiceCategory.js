@@ -21,6 +21,13 @@ const serviceCategorySchema = new mongoose.Schema(
       default: true,
     },
 
+    // Admin toggle: workers in this category get free access (no subscription needed)
+    isFree: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
     // optional IST timestamps
     createdAtIST: { type: String },
     updatedAtIST: { type: String },
