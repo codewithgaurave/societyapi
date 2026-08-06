@@ -116,6 +116,13 @@ const userSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    societyCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: null,
+      index: true,
+    },
     onboardedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",

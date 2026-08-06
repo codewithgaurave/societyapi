@@ -20,6 +20,10 @@ export const createPost = async (req, res) => {
     const user = await User.findById(userId).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    if (!user.societyCode || !user.societyCode.trim()) {
+      return res.status(400).json({ message: "Community post requires a society code. Please update your profile with your society code first." });
+    }
+
     const { type, title, description, colonyId, targetAddress, targetPincode, targetLat, targetLng } = req.body;
 
     if (!title?.trim() || !description?.trim()) {
@@ -76,63 +80,10 @@ export const createPost = async (req, res) => {
 
         const filterUser = {
           fcmToken: { $exists: true, $ne: null },
+          societyCode: user.societyCode,
         };
 
-        let isColonyTargeted = false;
-
-        if (post.colony) {
-          // Send notification ONLY to members of this specific colony
-          filterUser.colony = post.colony;
-          isColonyTargeted = true;
-        } else if (targetPincode || (targetLat && targetLng)) {
-          // Send notification to users matching searched Google Places pincode or within 5km of searched coords
-          const conditions = [];
-          if (targetPincode) {
-            conditions.push({ pincode: Number(targetPincode) });
-          }
-          if (targetLat && targetLng && !isNaN(Number(targetLat)) && !isNaN(Number(targetLng))) {
-            conditions.push({
-              location: {
-                $geoWithin: {
-                  $centerSphere: [
-                    [Number(targetLng), Number(targetLat)],
-                    5 / 6378.1, // 5km in radians
-                  ],
-                },
-              },
-            });
-          }
-          if (conditions.length > 0) {
-            filterUser.$or = conditions;
-          }
-        } else {
-          // Fallback to user's registered colony first, then pincode/location
-          if (user.colony) {
-            filterUser.colony = user.colony;
-            isColonyTargeted = true;
-          } else if (user.location?.coordinates && user.location.coordinates[0] !== 0) {
-            filterUser.location = {
-              $geoWithin: {
-                $centerSphere: [
-                  user.location.coordinates,
-                  10 / 6378.1, // 10km in radians
-                ],
-              },
-            };
-          } else if (user.pincode) {
-            filterUser.pincode = user.pincode;
-          }
-        }
-
         let nearbyUsers = await User.find(filterUser).select("fcmToken fullName").lean();
-
-        // If targeted search returns 0 tokens, fallback to all users ONLY if we did not target a specific colony
-        if ((!nearbyUsers || nearbyUsers.length === 0) && !isColonyTargeted) {
-          console.log("ℹ️ No specific location tokens found. Falling back to all active FCM users...");
-          nearbyUsers = await User.find({
-            fcmToken: { $exists: true, $ne: null },
-          }).select("fcmToken fullName").lean();
-        }
 
         const tokens = nearbyUsers
           .map((u) => u.fcmToken)

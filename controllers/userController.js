@@ -69,6 +69,7 @@ export const registerUser = async (req, res) => {
       lng, // ✅ Add lng
       empCode, // ✅ Employee Code
       employeeCode, // alternative field name
+      societyCode,
       colonyId,
       colony,
     } = req.body;
@@ -221,6 +222,7 @@ export const registerUser = async (req, res) => {
       empCode: matchedEmpCode,
       onboardedBy: onboardedBy,
       colony: colonyId || colony || null,
+      societyCode: societyCode ? societyCode.trim().toUpperCase() : null,
       // city: cityData,
       // state: stateData,
     });
@@ -251,6 +253,7 @@ export const registerUser = async (req, res) => {
         city: user.city,
         state: user.state,
         colony: user.colony,
+        societyCode: user.societyCode,
         createdAt: user.createdAt,
       },
       token,
@@ -433,6 +436,7 @@ export const updateMyProfile = async (req, res) => {
       adharCard,
       serviceCharge,
       otherCharges, // ✅ Changed from perHourCharge to otherCharges
+      societyCode,
     } = req.body;
 
     const updates = {};
@@ -449,6 +453,7 @@ export const updateMyProfile = async (req, res) => {
     if (adharCard !== undefined) updates.adharCard = adharCard;
     if (serviceCharge !== undefined) updates.serviceCharge = serviceCharge;
     if (otherCharges !== undefined) updates.otherCharges = otherCharges; // ✅ Changed
+    if (societyCode !== undefined) updates.societyCode = societyCode ? societyCode.trim().toUpperCase() : null;
 
     // password change (optional)
     if (password) {
@@ -973,6 +978,7 @@ export const adminUpdateUser = async (req, res) => {
       otherCharges, // ✅ Changed from perHourCharge to otherCharges
       isBlocked,
       tatkalEnabled,
+      societyCode,
     } = req.body;
 
     const updates = {};
@@ -991,6 +997,7 @@ export const adminUpdateUser = async (req, res) => {
     if (otherCharges !== undefined) updates.otherCharges = otherCharges; // ✅ Changed
     if (isBlocked !== undefined) updates.isBlocked = !!isBlocked;
     if (tatkalEnabled !== undefined) updates.tatkalEnabled = !!tatkalEnabled;
+    if (societyCode !== undefined) updates.societyCode = societyCode ? societyCode.trim().toUpperCase() : null;
 
     if (password) {
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
