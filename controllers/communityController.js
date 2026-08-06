@@ -57,6 +57,7 @@ export const createPost = async (req, res) => {
 
     const post = await CommunityPost.create({
       author: userId,
+      societyCode: user.societyCode ? user.societyCode.trim().toUpperCase() : null,
       pincode: finalPincode,
       colony: isValidColonyId ? colonyId : (user.colony || null),
       targetAddress: targetAddress || null,
@@ -127,12 +128,10 @@ export const getPosts = async (req, res) => {
     const filter = { isActive: true };
     if (type && type !== "all") filter.type = type;
 
-    if (colonyId && colonyId !== "all" && mongoose.Types.ObjectId.isValid(colonyId)) {
-      filter.colony = colonyId;
-    } else if (user.colony) {
-      filter.colony = user.colony;
+    if (user.societyCode) {
+      filter.societyCode = user.societyCode.trim().toUpperCase();
     } else {
-      filter.pincode = user.pincode;
+      filter.societyCode = "NONE";
     }
 
     const posts = await CommunityPost.find(filter)

@@ -22,6 +22,9 @@ const communityPostSchema = new mongoose.Schema(
     // Society filter — same pincode wale hi dekh sakte hain
     pincode: { type: Number, default: 0, index: true },
 
+    // Society Code filter
+    societyCode: { type: String, default: null, index: true },
+
     // Optional colony filter
     colony: {
       type: mongoose.Schema.Types.ObjectId,

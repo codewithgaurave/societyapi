@@ -371,6 +371,7 @@ export const loginUser = async (req, res) => {
         city: user.city,
         state: user.state,
         colony: user.colony,
+        societyCode: user.societyCode,
       },
       token,
     });
