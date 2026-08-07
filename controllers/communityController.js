@@ -81,7 +81,7 @@ export const createPost = async (req, res) => {
 
         const filterUser = {
           fcmToken: { $exists: true, $ne: null },
-          societyCode: user.societyCode,
+          societyCode: user.societyCode ? user.societyCode.trim().toUpperCase() : "NONE",
         };
 
         let nearbyUsers = await User.find(filterUser).select("fcmToken fullName").lean();
@@ -164,9 +164,17 @@ export const getPosts = async (req, res) => {
 export const getPostById = async (req, res) => {
   try {
     const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Invalid user token" });
+
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const userSocietyCode = user.societyCode ? user.societyCode.trim().toUpperCase() : "NONE";
+
     const post = await CommunityPost.findOne({
       _id: req.params.id,
       isActive: true,
+      societyCode: userSocietyCode,
     })
       .populate("author", "fullName profileImage pincode")
       .populate("comments.user", "fullName profileImage")
@@ -237,7 +245,14 @@ export const deletePost = async (req, res) => {
 export const toggleLike = async (req, res) => {
   try {
     const userId = getUserId(req);
-    const post = await CommunityPost.findById(req.params.id);
+    if (!userId) return res.status(401).json({ message: "Invalid user token" });
+
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const userSocietyCode = user.societyCode ? user.societyCode.trim().toUpperCase() : "NONE";
+
+    const post = await CommunityPost.findOne({ _id: req.params.id, societyCode: userSocietyCode });
     if (!post) return res.status(404).json({ message: "Post not found" });
 
     const idx = post.likes.findIndex((id) => id.toString() === userId.toString());
@@ -262,10 +277,17 @@ export const toggleLike = async (req, res) => {
 export const addComment = async (req, res) => {
   try {
     const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Invalid user token" });
+
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
     const { text } = req.body;
     if (!text?.trim()) return res.status(400).json({ message: "Comment text required" });
 
-    const post = await CommunityPost.findById(req.params.id);
+    const userSocietyCode = user.societyCode ? user.societyCode.trim().toUpperCase() : "NONE";
+
+    const post = await CommunityPost.findOne({ _id: req.params.id, societyCode: userSocietyCode });
     if (!post) return res.status(404).json({ message: "Post not found" });
 
     const ist = new Date().toLocaleString("en-IN", {
@@ -289,7 +311,14 @@ export const addComment = async (req, res) => {
 export const deleteComment = async (req, res) => {
   try {
     const userId = getUserId(req);
-    const post = await CommunityPost.findById(req.params.id);
+    if (!userId) return res.status(401).json({ message: "Invalid user token" });
+
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const userSocietyCode = user.societyCode ? user.societyCode.trim().toUpperCase() : "NONE";
+
+    const post = await CommunityPost.findOne({ _id: req.params.id, societyCode: userSocietyCode });
     if (!post) return res.status(404).json({ message: "Post not found" });
 
     const comment = post.comments.id(req.params.commentId);
