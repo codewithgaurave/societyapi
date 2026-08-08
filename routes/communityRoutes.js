@@ -13,6 +13,8 @@ import {
   adminGetPosts,
   adminTogglePost,
   adminDeletePost,
+  getCommunitySettings,
+  updateCommunitySettings,
 } from "../controllers/communityController.js";
 import { requireAuth } from "../middleware/auth.js";
 import { authenticateAdmin } from "../middleware/adminAuth.js";
@@ -21,6 +23,8 @@ import { uploadCommunityImages } from "../config/cloudinary.js";
 const router = express.Router();
 
 // ── Admin routes (no user auth needed) ──────────────────────────────────────
+router.get("/admin/settings", authenticateAdmin, getCommunitySettings);       // GET /api/community/admin/settings
+router.put("/admin/settings", authenticateAdmin, updateCommunitySettings);    // PUT /api/community/admin/settings
 router.get("/admin/posts", authenticateAdmin, adminGetPosts);              // GET  /api/community/admin/posts
 router.patch("/admin/posts/:id/toggle", authenticateAdmin, adminTogglePost); // PATCH /api/community/admin/posts/:id/toggle
 router.delete("/admin/posts/:id", authenticateAdmin, adminDeletePost);     // DELETE /api/community/admin/posts/:id

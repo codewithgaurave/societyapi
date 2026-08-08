@@ -2,7 +2,58 @@
 import mongoose from "mongoose";
 import CommunityPost from "../models/CommunityPost.js";
 import User from "../models/User.js";
+import SystemSetting from "../models/SystemSetting.js";
 import { sendMulticastNotification } from "../services/notificationService.js";
+
+// Helper: Get auto-delete hours for community posts (default 48 hours)
+export const getAutoDeleteHours = async () => {
+  try {
+    const setting = await SystemSetting.findOne({ key: "communityAutoDeleteHours" }).lean();
+    if (setting && typeof setting.value === "number") {
+      return setting.value;
+    }
+  } catch (e) {
+    console.error("Error fetching communityAutoDeleteHours setting:", e);
+  }
+  return 48;
+};
+
+// ✅ Admin: Get Community Settings (autoDeleteHours)
+export const getCommunitySettings = async (req, res) => {
+  try {
+    const autoDeleteHours = await getAutoDeleteHours();
+    return res.json({ communityAutoDeleteHours: autoDeleteHours });
+  } catch (err) {
+    console.error("getCommunitySettings error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ Admin: Update Community Settings (autoDeleteHours)
+export const updateCommunitySettings = async (req, res) => {
+  try {
+    const { communityAutoDeleteHours } = req.body;
+    const hours = Number(communityAutoDeleteHours);
+
+    if (isNaN(hours) || hours < 0) {
+      return res.status(400).json({ message: "Auto delete hours must be a non-negative number" });
+    }
+
+    const setting = await SystemSetting.findOneAndUpdate(
+      { key: "communityAutoDeleteHours" },
+      { value: hours, description: "Auto delete duration for community posts in hours" },
+      { upsert: true, new: true }
+    );
+
+    return res.json({
+      message: "Community settings updated successfully",
+      communityAutoDeleteHours: setting.value,
+    });
+  } catch (err) {
+    console.error("updateCommunitySettings error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
 
 // Helper: robustly extract user ID from req.user payload
 const getUserId = (req) => req.user?._id || req.user?.sub || req.user?.id || req.user?.userId;
@@ -124,6 +175,7 @@ export const getPosts = async (req, res) => {
 
     const { type, colonyId, page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const autoDeleteHours = await getAutoDeleteHours();
 
     const filter = { isActive: true };
     if (type && type !== "all") filter.type = type;
@@ -132,6 +184,12 @@ export const getPosts = async (req, res) => {
       filter.societyCode = user.societyCode.trim().toUpperCase();
     } else {
       filter.societyCode = "NONE";
+    }
+
+    // Auto-delete / auto-expire filter
+    if (autoDeleteHours > 0) {
+      const cutoffDate = new Date(Date.now() - autoDeleteHours * 60 * 60 * 1000);
+      filter.createdAt = { $gte: cutoffDate };
     }
 
     const posts = await CommunityPost.find(filter)
@@ -344,14 +402,22 @@ export const deleteComment = async (req, res) => {
 // ✅ Admin: Get all posts (society-wise filter optional)
 export const adminGetPosts = async (req, res) => {
   try {
-    const { type, colonyId, pincode, page = 1, limit = 20, isActive } = req.query;
+    const { type, colonyId, pincode, page = 1, limit = 20, isActive, status } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const autoDeleteHours = await getAutoDeleteHours();
+    const cutoffDate = autoDeleteHours > 0 ? new Date(Date.now() - autoDeleteHours * 60 * 60 * 1000) : null;
 
     const filter = {};
     if (isActive !== undefined) filter.isActive = isActive === "true";
     if (type && type !== "all") filter.type = type;
     if (colonyId && mongoose.Types.ObjectId.isValid(colonyId)) filter.colony = colonyId;
     if (pincode) filter.pincode = Number(pincode);
+
+    if (status === "expired" && cutoffDate) {
+      filter.createdAt = { $lt: cutoffDate };
+    } else if (status === "unexpired" && cutoffDate) {
+      filter.createdAt = { $gte: cutoffDate };
+    }
 
     const posts = await CommunityPost.find(filter)
       .sort({ createdAt: -1 })
@@ -361,8 +427,18 @@ export const adminGetPosts = async (req, res) => {
       .populate("colony", "name city pincode")
       .lean();
 
+    const enriched = posts.map((p) => {
+      const isExpired = cutoffDate ? new Date(p.createdAt) < cutoffDate : false;
+      return {
+        ...p,
+        isExpired,
+        autoDeleteHours,
+      };
+    });
+
     const total = await CommunityPost.countDocuments(filter);
-    return res.json({ posts, total, page: parseInt(page) });
+    const pages = Math.ceil(total / parseInt(limit)) || 1;
+    return res.json({ posts: enriched, total, page: parseInt(page), pages, communityAutoDeleteHours: autoDeleteHours });
   } catch (err) {
     console.error("adminGetPosts error:", err);
     return res.status(500).json({ message: "Server error" });
