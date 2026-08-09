@@ -800,34 +800,40 @@ export const listTatkalUsersByPincode = async (req, res) => {
     const { default: Availability } = await import("../models/Availability.js");
     const { default: Colony } = await import("../models/Colony.js");
     
-    const availabilityFilter = { isAvailable: true };
+    const andConditions = [{ isAvailable: true }];
     
-    // Filter by colony or pincode-based colonies
+    // Filter by colony or pincode-based colonies/direct pincode
     if (colonyId) {
-      availabilityFilter.colonies = colonyId;
+      andConditions.push({ colonies: colonyId });
     } else {
       // Find colonies in this pincode
       const colonies = await Colony.find({ pincode: Number(pincode) }).lean();
       const colonyIds = colonies.map(c => c._id);
+      const locOr = [{ pincode: Number(pincode) }];
       if (colonyIds.length > 0) {
-        availabilityFilter.colonies = { $in: colonyIds };
+        locOr.push({ colonies: { $in: colonyIds } });
       }
+      andConditions.push({ $or: locOr });
     }
     
     if (date) {
       const queryDate = new Date(date);
-      availabilityFilter.$or = [
-        { date: queryDate },
-        { availabilityType: "always" },
-        { 
-          $and: [
-            { availabilityType: "range" },
-            { startDate: { $lte: queryDate } },
-            { endDate: { $gte: queryDate } }
-          ]
-        }
-      ];
+      andConditions.push({
+        $or: [
+          { date: queryDate },
+          { availabilityType: "always" },
+          { 
+            $and: [
+              { availabilityType: "range" },
+              { startDate: { $lte: queryDate } },
+              { endDate: { $gte: queryDate } }
+            ]
+          }
+        ]
+      });
     }
+
+    const availabilityFilter = { $and: andConditions };
 
     const availableUsers = await Availability.find(availabilityFilter)
       .populate("user", "_id")
@@ -1307,38 +1313,40 @@ export const getSocietyServiceUsersByLocation = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    // Get users who have availability in this pincode's colonies
+    // Get users who have availability in this pincode's colonies or pincode directly
     const { default: Availability } = await import("../models/Availability.js");
     const { default: Colony } = await import("../models/Colony.js");
     
     const colonies = await Colony.find({ pincode: Number(pincode) }).lean();
     const colonyIds = colonies.map(c => c._id);
     
-    let availableUsers = [];
+    const locOr = [{ pincode: Number(pincode) }];
     if (colonyIds.length > 0) {
-      const availabilityFilter = {
-        isAvailable: true,
-        colonies: { $in: colonyIds }
-      };
-      
-      const availabilities = await Availability.find(availabilityFilter)
-        .populate({
-          path: "user",
-          match: { isBlocked: false, role: "society service" },
-          select: `fullName mobileNumber whatsappNumber email registrationID
-                   profileImage role serviceCategory experience tatkalEnabled
-                   pincode address otherCharges serviceCharge`,
-          populate: {
-            path: "serviceCategory",
-            select: "name description"
-          }
-        })
-        .lean();
-      
-      availableUsers = availabilities
-        .filter(av => av.user && (!serviceCategoryId || av.user.serviceCategory?._id?.toString() === serviceCategoryId))
-        .map(av => av.user);
+      locOr.push({ colonies: { $in: colonyIds } });
     }
+    
+    const availabilityFilter = {
+      isAvailable: true,
+      $or: locOr
+    };
+    
+    const availabilities = await Availability.find(availabilityFilter)
+      .populate({
+        path: "user",
+        match: { isBlocked: false, role: "society service" },
+        select: `fullName mobileNumber whatsappNumber email registrationID
+                 profileImage role serviceCategory experience tatkalEnabled
+                 pincode address otherCharges serviceCharge`,
+        populate: {
+          path: "serviceCategory",
+          select: "name description"
+        }
+      })
+      .lean();
+    
+    const availableUsers = availabilities
+      .filter(av => av.user && (!serviceCategoryId || av.user.serviceCategory?._id?.toString() === serviceCategoryId))
+      .map(av => av.user);
 
     // Combine and deduplicate users (registeredUsers + availableUsers)
     const userMap = new Map();
