@@ -128,7 +128,7 @@ export const createPost = async (req, res) => {
     setImmediate(async () => {
       try {
         const typeLabels = { post: "Post", complaint: "Complaint", info: "Info", event: "Event", lost_found: "Lost & Found" };
-        const typeLabel = typeLabels[type] || "Post";
+        const typeLabel = typeLabels[type] || (type ? type.split(/[_-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : "Post");
 
         const filterUser = {
           fcmToken: { $exists: true, $ne: null },

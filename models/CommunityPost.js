@@ -42,7 +42,6 @@ const communityPostSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["post", "complaint", "info", "event", "lost_found"],
       default: "post",
       index: true,
     },
