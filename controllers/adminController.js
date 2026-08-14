@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import Admin from "../models/Admin.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h";
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "365d";
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || "12", 10);
 
 // helpers

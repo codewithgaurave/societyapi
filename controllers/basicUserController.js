@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import BasicUser from "../models/BasicUser.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const BASIC_JWT_EXPIRES_IN = process.env.BASIC_JWT_EXPIRES_IN || "7d";
+const BASIC_JWT_EXPIRES_IN = process.env.BASIC_JWT_EXPIRES_IN || process.env.JWT_EXPIRES_IN || "365d";
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || "12", 10);
 
 const signBasicUserJwt = (user) =>

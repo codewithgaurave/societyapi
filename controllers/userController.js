@@ -33,7 +33,7 @@ const getFreeCategoryUserIds = async (userIds) => {
 };
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN = process.env.USER_JWT_EXPIRES_IN || "7d";
+const JWT_EXPIRES_IN = process.env.USER_JWT_EXPIRES_IN || process.env.JWT_EXPIRES_IN || "365d";
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || "12", 10);
 
 const signUserJwt = (user) =>
