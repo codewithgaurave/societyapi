@@ -5,6 +5,7 @@ const communityCategorySchema = new mongoose.Schema(
   {
     value: { type: String, required: true, unique: true, trim: true, lowercase: true },
     label: { type: String, required: true, trim: true },
+    subtitle: { type: String, default: "", trim: true }, // Hindi / descriptive subtitle for tiles
     icon: { type: String, default: "message" }, // icon name string (for app)
     color: { type: String, default: "#6366F1" }, // hex color
     isActive: { type: Boolean, default: true },
