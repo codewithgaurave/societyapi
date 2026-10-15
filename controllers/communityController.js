@@ -81,6 +81,20 @@ export const createPost = async (req, res) => {
       return res.status(400).json({ message: "Title and description are required" });
     }
 
+    // Check if posting to RWA Notice Board category
+    const postType = (type || "post").trim().toLowerCase();
+    const isRwaCategory = 
+      postType === "complaint" || 
+      postType === "rwa" || 
+      postType === "rwa_notice" || 
+      postType === "rwa_suggestions";
+
+    if (isRwaCategory && !user.isRwaUser && user.role !== "admin") {
+      return res.status(403).json({
+        message: "Only authorized RWA members can post to RWA Notice Board."
+      });
+    }
+
     let targetColony = null;
     const isValidColonyId = colonyId && mongoose.Types.ObjectId.isValid(colonyId);
     if (isValidColonyId) {

@@ -47,6 +47,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isRwaUser: {
+      type: Boolean,
+      default: false,
+    },
     role: {
       type: String,
       required: true,

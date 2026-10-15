@@ -7,6 +7,7 @@ import {
   getMyProfile,
   listUsers,
   setUserBlockStatus,
+  setUserRwaStatus,
   updateMyProfile,
   adminUpdateUser,
   deleteUser,
@@ -74,6 +75,9 @@ router.get("/", requireAuth, listUsers);
 
 // 🔹 Admin: block/unblock user
 router.patch("/:id/block", requireAuth, setUserBlockStatus);
+
+// 🔹 Admin: toggle RWA status for user
+router.patch("/:id/rwa-status", requireAuth, setUserRwaStatus);
 
 // 🔹 Admin: update user
 router.put("/:id", requireAuth, adminUpdateUser);

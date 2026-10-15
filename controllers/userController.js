@@ -254,6 +254,7 @@ export const registerUser = async (req, res) => {
         state: user.state,
         colony: user.colony,
         societyCode: user.societyCode,
+        isRwaUser: !!user.isRwaUser,
         createdAt: user.createdAt,
       },
       token,
@@ -372,6 +373,7 @@ export const loginUser = async (req, res) => {
         state: user.state,
         colony: user.colony,
         societyCode: user.societyCode,
+        isRwaUser: !!user.isRwaUser,
       },
       token,
     });
@@ -961,6 +963,36 @@ export const setUserBlockStatus = async (req, res) => {
   }
 };
 
+// ✅ Admin: grant / revoke RWA status
+export const setUserRwaStatus = async (req, res) => {
+  try {
+    if (!req.user || !req.user.adminId) {
+      return res.status(403).json({ message: "Admins only" });
+    }
+
+    const { id } = req.params;
+    const { isRwaUser } = req.body;
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      { isRwaUser: !!isRwaUser },
+      { new: true }
+    ).lean();
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.json({
+      message: `User RWA access ${isRwaUser ? "granted" : "revoked"} successfully`,
+      user,
+    });
+  } catch (err) {
+    console.error("setUserRwaStatus error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ✅ Admin: update any user (edit)
 export const adminUpdateUser = async (req, res) => {
   try {
@@ -984,6 +1016,7 @@ export const adminUpdateUser = async (req, res) => {
       serviceCharge,
       otherCharges, // ✅ Changed from perHourCharge to otherCharges
       isBlocked,
+      isRwaUser,
       tatkalEnabled,
       societyCode,
     } = req.body;
@@ -1003,6 +1036,7 @@ export const adminUpdateUser = async (req, res) => {
     if (serviceCharge !== undefined) updates.serviceCharge = serviceCharge;
     if (otherCharges !== undefined) updates.otherCharges = otherCharges; // ✅ Changed
     if (isBlocked !== undefined) updates.isBlocked = !!isBlocked;
+    if (isRwaUser !== undefined) updates.isRwaUser = !!isRwaUser;
     if (tatkalEnabled !== undefined) updates.tatkalEnabled = !!tatkalEnabled;
     if (societyCode !== undefined) updates.societyCode = societyCode ? societyCode.trim().toUpperCase() : null;
 
